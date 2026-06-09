@@ -22,11 +22,22 @@ Week 2 begins after the existing repository and local environment are verified.
 ## Camera Registration
 
 - [x] Create camera table and policies
-- Add camera list page
-- Add camera registration form
+- [x] Add camera list page
+- [x] Add camera registration form
 - Generate a one-time device token
 - Store only the token hash
 - [x] Add camera status and heartbeat fields
+
+## Static UI Prototype
+
+- [x] Build responsive dashboard shell
+- [x] Build overview page
+- [x] Build incident list and review pages
+- [x] Build camera list, registration, and detail pages
+- [x] Build analytics page
+- [x] Build members page
+- [x] Build settings page
+- [x] Synchronize all static routes to Capacitor
 
 ## Verification
 
