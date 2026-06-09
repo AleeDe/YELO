@@ -3227,7 +3227,7 @@ h3 {
 
 .society-directory article {
   display: grid;
-  grid-template-columns: auto minmax(190px, 1.5fr) minmax(130px, 0.8fr) 80px 80px auto 100px;
+  grid-template-columns: auto minmax(190px, 1.5fr) minmax(130px, 0.8fr) 80px 80px auto minmax(126px, auto);
   align-items: center;
   gap: 14px;
   min-height: 88px;
@@ -3261,10 +3261,36 @@ h3 {
   display: grid;
 }
 
-.society-directory time,
 .toolbar-count {
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.invite-admin-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.invitation-guidance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  border: 1px solid #b9d7ca;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  padding: 12px;
+}
+
+.invitation-guidance p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .toolbar-count {
@@ -3672,8 +3698,9 @@ h3 {
     display: none;
   }
 
-  .society-directory time {
-    justify-self: end;
+  .invite-admin-action {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .operator-queue article {

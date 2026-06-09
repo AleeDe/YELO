@@ -19,7 +19,7 @@ Week 2 begins after the existing repository and local environment are verified.
 - [x] Add society membership policies
 - [x] Seed one super admin
 - [x] Create society management APIs
-- Add society member invitations
+- [x] Add society member invitations
 
 ## Camera Registration
 

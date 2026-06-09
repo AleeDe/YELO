@@ -5,6 +5,7 @@ import {
   Building2,
   CheckCircle2,
   LoaderCircle,
+  MailPlus,
   Plus,
   Search,
   X,
@@ -32,6 +33,11 @@ type SocietyForm = {
   timezone: string;
 };
 
+type InvitationForm = {
+  email: string;
+  fullName: string;
+};
+
 const emptyForm: SocietyForm = {
   name: "",
   slug: "",
@@ -54,6 +60,7 @@ function countRelation(relation: { count: number }[] | undefined) {
 export default function SocietiesPage() {
   const auth = useAuth();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const invitationDialogRef = useRef<HTMLDialogElement>(null);
   const [societies, setSocieties] = useState<SocietyRow[]>([]);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<SocietyForm>(emptyForm);
@@ -63,6 +70,13 @@ export default function SocietiesPage() {
   const [loadError, setLoadError] = useState("");
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [invitationSociety, setInvitationSociety] = useState<SocietyRow | null>(null);
+  const [invitation, setInvitation] = useState<InvitationForm>({
+    email: "",
+    fullName: "",
+  });
+  const [invitationError, setInvitationError] = useState("");
+  const [inviting, setInviting] = useState(false);
 
   const loadSocieties = useCallback(async () => {
     if (!auth.client || !auth.user) return;
@@ -117,6 +131,52 @@ export default function SocietiesPage() {
       name,
       slug: slugEdited ? current.slug : slugify(name),
     }));
+  }
+
+  function openInvitationDialog(society: SocietyRow) {
+    setInvitationSociety(society);
+    setInvitation({ email: "", fullName: "" });
+    setInvitationError("");
+    invitationDialogRef.current?.showModal();
+  }
+
+  function closeInvitationDialog() {
+    if (inviting) return;
+    invitationDialogRef.current?.close();
+  }
+
+  async function inviteAdministrator(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!auth.client || !invitationSociety) return;
+    setInviting(true);
+    setInvitationError("");
+
+    const { error } = await auth.client.functions.invoke("invite-society-member", {
+      body: {
+        societyId: invitationSociety.id,
+        email: invitation.email.trim(),
+        fullName: invitation.fullName.trim(),
+        role: "society_admin",
+        redirectTo: `${window.location.origin}/auth/update-password`,
+      },
+    });
+
+    setInviting(false);
+    if (error) {
+      let message = error.message;
+      if ("context" in error && error.context instanceof Response) {
+        const response = await error.context.json().catch(() => null);
+        message = response?.error ?? message;
+      }
+      setInvitationError(message);
+      return;
+    }
+
+    const societyName = invitationSociety.name;
+    invitationDialogRef.current?.close();
+    setSuccessMessage(`Administrator invitation sent for ${societyName}.`);
+    await loadSocieties();
+    window.setTimeout(() => setSuccessMessage(""), 5000);
   }
 
   async function createSociety(event: React.FormEvent<HTMLFormElement>) {
@@ -258,13 +318,13 @@ export default function SocietiesPage() {
                   <strong>{countRelation(society.society_members)}</strong>
                 </div>
                 <StatusPill status={society.is_active ? "Active" : "Needs review"} />
-                <time dateTime={society.created_at}>
-                  {new Intl.DateTimeFormat("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  }).format(new Date(society.created_at))}
-                </time>
+                <button
+                  className="table-action invite-admin-action focus-ring"
+                  type="button"
+                  onClick={() => openInvitationDialog(society)}
+                >
+                  <MailPlus size={16} /> Invite admin
+                </button>
               </article>
             ))}
           </div>
@@ -365,6 +425,105 @@ export default function SocietiesPage() {
             <button className="primary-button focus-ring" type="submit" disabled={submitting}>
               {submitting ? <LoaderCircle className="spin" size={18} /> : <Plus size={18} />}
               {submitting ? "Creating..." : "Create society"}
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog
+        ref={invitationDialogRef}
+        className="form-dialog"
+        onCancel={(event) => {
+          if (inviting) event.preventDefault();
+        }}
+        onClick={(event) => {
+          if (event.target === invitationDialogRef.current) closeInvitationDialog();
+        }}
+      >
+        <form className="dialog-card" onSubmit={inviteAdministrator}>
+          <div className="dialog-heading">
+            <div>
+              <p className="eyebrow">Society access</p>
+              <h2>Invite administrator</h2>
+              <p>
+                Give one person administrator access to{" "}
+                <strong>{invitationSociety?.name}</strong>.
+              </p>
+            </div>
+            <button
+              className="icon-button focus-ring"
+              type="button"
+              aria-label="Close administrator invitation"
+              onClick={closeInvitationDialog}
+              disabled={inviting}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="invitation-guidance">
+            <MailPlus size={21} />
+            <div>
+              <strong>Supabase sends a secure invitation email</strong>
+              <p>The recipient chooses their password before entering the society workspace.</p>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <label className="form-field">
+              <span>Full name</span>
+              <input
+                autoFocus
+                required
+                minLength={2}
+                maxLength={120}
+                value={invitation.fullName}
+                onChange={(event) =>
+                  setInvitation((current) => ({
+                    ...current,
+                    fullName: event.target.value,
+                  }))
+                }
+                placeholder="Administrator name"
+              />
+            </label>
+            <label className="form-field">
+              <span>Email address</span>
+              <input
+                type="email"
+                autoComplete="email"
+                required
+                value={invitation.email}
+                onChange={(event) =>
+                  setInvitation((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+                placeholder="admin@example.com"
+              />
+            </label>
+          </div>
+
+          {invitationError && (
+            <div className="auth-error" role="alert">
+              <AlertCircle size={18} />
+              <span>{invitationError}</span>
+            </div>
+          )}
+
+          <div className="dialog-actions">
+            <button
+              className="secondary-button focus-ring"
+              type="button"
+              onClick={closeInvitationDialog}
+              disabled={inviting}
+            >
+              Cancel
+            </button>
+            <button className="primary-button focus-ring" type="submit" disabled={inviting}>
+              {inviting ? <LoaderCircle className="spin" size={18} /> : <MailPlus size={18} />}
+              {inviting ? "Sending invitation..." : "Send invitation"}
             </button>
           </div>
         </form>
