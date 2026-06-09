@@ -37,6 +37,11 @@ Week 2 begins after the existing repository and local environment are verified.
 - [x] Build analytics page
 - [x] Build members page
 - [x] Build settings page
+- [x] Make all settings sections interactive
+- [x] Add society switcher menu
+- [x] Add account and role switcher menu
+- [x] Build Super Admin dashboard
+- [x] Build Operator dashboard
 - [x] Synchronize all static routes to Capacitor
 
 ## Verification
