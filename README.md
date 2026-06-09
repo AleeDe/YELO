@@ -8,3 +8,16 @@ authentication, data, storage, and realtime alerts, and YOLO with OpenCV for
 local object detection. Google Colab is used for model training and export.
 
 Project planning and architecture documents are available in [`docs`](docs).
+
+## Dashboard
+
+The Next.js and Capacitor client lives in [`apps/dashboard`](apps/dashboard).
+
+```bash
+cd apps/dashboard
+npm install
+npm run dev
+```
+
+The interface standard is documented in
+[`docs/HCI_UI_STANDARD.md`](docs/HCI_UI_STANDARD.md).
