@@ -1,7 +1,7 @@
 <h2>Reset your YELO password</h2>
 <p>We received a request to reset the password for your YELO account.</p>
 <p>
-  <a href="{{ .RedirectTo }}?confirmation_url={{ .ConfirmationURL }}">
+  <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery">
     Continue securely
   </a>
 </p>

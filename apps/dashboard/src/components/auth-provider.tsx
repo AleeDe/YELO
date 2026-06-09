@@ -71,11 +71,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: subscription } = client.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         if (!active) return;
         setUser(session?.user ?? null);
         if (session?.user) {
-          await loadRole(session.user);
+          const currentUser = session.user;
+          window.setTimeout(() => {
+            if (active) void loadRole(currentUser);
+          }, 0);
         } else {
           setRole(null);
           setSocietyId(null);
