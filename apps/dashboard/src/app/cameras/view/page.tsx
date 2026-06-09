@@ -1,16 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Camera, Clock3, LoaderCircle, MapPin, ShieldCheck, Wifi } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Camera,
+  Clock3,
+  Edit3,
+  ExternalLink,
+  LoaderCircle,
+  MapPin,
+  ShieldCheck,
+  Trash2,
+  Wifi,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 
 type CameraDetail = {
   id: string;
   name: string;
-  location_label: string;
-  source_type: string;
+  location_label: string | null;
+  source_type: "mobile" | "webcam" | "rtsp" | "recorded_video";
   status: string;
   detection_enabled: boolean;
   confidence_threshold: number;
@@ -19,10 +33,96 @@ type CameraDetail = {
   restricted_zones: { id: string; name: string; is_active: boolean }[];
 };
 
+type EditForm = {
+  name: string;
+  location: string;
+  sourceType: CameraDetail["source_type"];
+  detectionEnabled: boolean;
+  confidenceThreshold: number;
+  confirmationSeconds: number;
+};
+
+const sourceLabels: Record<CameraDetail["source_type"], string> = {
+  mobile: "Mobile camera",
+  webcam: "Webcam",
+  rtsp: "CCTV / RTSP",
+  recorded_video: "Recorded video",
+};
+
+const sourceGuidance: Record<
+  CameraDetail["source_type"],
+  { state: string; title: string; steps: string[]; note: string }
+> = {
+  mobile: {
+    state: "Available now",
+    title: "Connect an Android or mobile browser",
+    steps: [
+      "Copy the one-time token shown when this camera is registered.",
+      "Open YELO on the phone and choose “Use this device as a camera”, or open /capture.",
+      "Paste the token, connect, then allow camera permission.",
+      "Tap Start camera, switch to the rear lens, position the phone, and keep YELO open.",
+    ],
+    note: "The phone needs internet access. Closing the page stops its heartbeat and preview.",
+  },
+  webcam: {
+    state: "Available now",
+    title: "Connect a laptop or USB webcam",
+    steps: [
+      "Open YELO /capture in Chrome or Edge on the computer connected to the webcam.",
+      "Paste the one-time camera token and select Connect camera.",
+      "Allow browser camera permission and select Start camera.",
+      "Keep the browser tab open while monitoring.",
+    ],
+    note: "Use HTTPS in production. Localhost is allowed during development.",
+  },
+  rtsp: {
+    state: "Gateway required",
+    title: "Connect an IP CCTV camera",
+    steps: [
+      "Find the camera’s RTSP URL from its manufacturer or NVR settings.",
+      "Run a local zero-cost gateway such as MediaMTX with FFmpeg on a PC or Raspberry Pi.",
+      "Keep the RTSP username and password in the gateway, never in browser code.",
+      "The next YELO milestone will let that gateway send frames or WebRTC video to detection.",
+    ],
+    note: "Raw RTSP cannot play directly in normal web browsers. CCTV registration exists, but ingestion is not connected yet.",
+  },
+  recorded_video: {
+    state: "Planned",
+    title: "Process a demonstration video",
+    steps: [
+      "Prepare a short MP4 showing the monitored area.",
+      "The upcoming upload processor will sample frames and run the detection model.",
+      "Detected events will then appear in the same incident workflow as live cameras.",
+    ],
+    note: "Recorded-video upload and inference are not implemented yet.",
+  },
+};
+
+function formFromCamera(camera: CameraDetail): EditForm {
+  return {
+    name: camera.name,
+    location: camera.location_label ?? "",
+    sourceType: camera.source_type,
+    detectionEnabled: camera.detection_enabled,
+    confidenceThreshold: Math.round(Number(camera.confidence_threshold) * 100),
+    confirmationSeconds: camera.confirmation_seconds,
+  };
+}
+
 export default function CameraDetailPage() {
   const auth = useAuth();
+  const router = useRouter();
+  const editDialogRef = useRef<HTMLDialogElement>(null);
+  const deleteDialogRef = useRef<HTMLDialogElement>(null);
   const [camera, setCamera] = useState<CameraDetail | null>(null);
+  const [form, setForm] = useState<EditForm | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const canManage = auth.role === "super_admin" || auth.role === "society_admin";
 
   useEffect(() => {
     if (!auth.client || !auth.user) return;
@@ -32,37 +132,99 @@ export default function CameraDetailPage() {
         setLoading(false);
         return;
       }
-      const { data } = await auth.client!
+      const { data, error: loadError } = await auth.client!
         .from("cameras")
         .select("id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, is_active)")
         .eq("id", id)
         .maybeSingle();
       setCamera(data as CameraDetail | null);
+      setError(loadError?.message ?? "");
       setLoading(false);
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [auth.client, auth.user]);
 
+  function openEditDialog() {
+    if (!camera) return;
+    setForm(formFromCamera(camera));
+    setError("");
+    editDialogRef.current?.showModal();
+  }
+
+  async function saveCamera(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!auth.client || !camera || !form) return;
+    setSaving(true);
+    setError("");
+    const { data, error: updateError } = await auth.client
+      .from("cameras")
+      .update({
+        name: form.name.trim(),
+        location_label: form.location.trim() || null,
+        source_type: form.sourceType,
+        detection_enabled: form.detectionEnabled,
+        confidence_threshold: form.confidenceThreshold / 100,
+        confirmation_seconds: form.confirmationSeconds,
+      })
+      .eq("id", camera.id)
+      .select("id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, is_active)")
+      .single();
+    setSaving(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "The camera could not be updated.");
+      return;
+    }
+    setCamera(data as CameraDetail);
+    setFeedback("Camera settings saved.");
+    editDialogRef.current?.close();
+    window.setTimeout(() => setFeedback(""), 3500);
+  }
+
+  async function deleteCamera(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!auth.client || !camera || deleteConfirmation !== camera.name) return;
+    setDeleting(true);
+    setError("");
+    const { error: deleteError } = await auth.client
+      .from("cameras")
+      .delete()
+      .eq("id", camera.id);
+    setDeleting(false);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    deleteDialogRef.current?.close();
+    router.replace("/cameras");
+  }
+
   if (loading) return <div className="directory-state" role="status"><LoaderCircle className="spin" size={24} /><p>Loading camera...</p></div>;
-  if (!camera) return <div className="directory-state"><Camera size={28} /><h1>Camera not found</h1><p>This camera does not exist or your account cannot access it.</p><Link href="/cameras" className="secondary-button focus-ring">Back to cameras</Link></div>;
+  if (!camera) return <div className="directory-state"><Camera size={28} /><h1>Camera not found</h1><p>{error || "This camera does not exist or your account cannot access it."}</p><Link href="/cameras" className="secondary-button focus-ring">Back to cameras</Link></div>;
 
   const status = camera.status[0].toUpperCase() + camera.status.slice(1);
+  const guidance = sourceGuidance[camera.source_type];
+
   return (
     <>
       <Link href="/cameras" className="back-link focus-ring"><ArrowLeft size={18} /> Back to cameras</Link>
-      <div className="detail-heading">
-        <div><p className="eyebrow">{camera.id.slice(0, 8)}</p><h1>{camera.name}</h1><p className="page-subtitle">{camera.location_label} · {camera.source_type}</p></div>
-        <StatusPill status={status} />
+      <div className="detail-heading camera-detail-heading">
+        <div><p className="eyebrow">{camera.id.slice(0, 8)}</p><h1>{camera.name}</h1><p className="page-subtitle">{camera.location_label || "No location label"} · {sourceLabels[camera.source_type]}</p></div>
+        <div className="camera-heading-actions">
+          <StatusPill status={status} />
+          {canManage && <button className="secondary-button focus-ring" type="button" onClick={openEditDialog}><Edit3 size={18} /> Edit camera</button>}
+          {canManage && <button className="danger-button focus-ring" type="button" onClick={() => { setDeleteConfirmation(""); setError(""); deleteDialogRef.current?.showModal(); }}><Trash2 size={17} /> Delete</button>}
+        </div>
       </div>
+      {feedback && <div className="page-feedback success" role="status">{feedback}</div>}
       <div className="camera-detail-grid">
         <section className="panel live-panel">
-          <div className="panel-heading"><div><p className="eyebrow">Camera source</p><h2>Preview</h2></div></div>
-          <div className="live-preview"><Camera size={48} /><p>Live preview will appear after the camera device connects.</p></div>
+          <div className="panel-heading"><div><p className="eyebrow">Camera source</p><h2>Preview</h2></div>{(camera.source_type === "mobile" || camera.source_type === "webcam") && <Link className="secondary-button focus-ring" href="/capture">Open capture <ExternalLink size={17} /></Link>}</div>
+          <div className="live-preview"><Camera size={48} /><p>Live preview will appear here after frame ingestion is connected to the dashboard.</p></div>
         </section>
         <aside className="camera-info-stack">
           <section className="panel detail-card"><h2>Connection health</h2><dl className="detail-list">
             <div><dt><Wifi size={16} /> Status</dt><dd>{status}</dd></div>
-            <div><dt><Camera size={16} /> Source</dt><dd>{camera.source_type}</dd></div>
+            <div><dt><Camera size={16} /> Source</dt><dd>{sourceLabels[camera.source_type]}</dd></div>
             <div><dt><Clock3 size={16} /> Last contact</dt><dd>{camera.last_seen_at ? new Date(camera.last_seen_at).toLocaleString() : "Never"}</dd></div>
           </dl></section>
           <section className="panel detail-card"><h2>Detection</h2><dl className="detail-list">
@@ -72,11 +234,47 @@ export default function CameraDetailPage() {
           </dl></section>
         </aside>
       </div>
+
+      <section className="panel connection-guide">
+        <div className="connection-guide-heading">
+          <div><p className="eyebrow">Connection guide</p><h2>{guidance.title}</h2></div>
+          <span>{guidance.state}</span>
+        </div>
+        <ol>{guidance.steps.map((step, index) => <li key={step}><span>{index + 1}</span><p>{step}</p></li>)}</ol>
+        <div className="connection-note"><AlertCircle size={19} /><p>{guidance.note}</p></div>
+      </section>
+
       <section className="panel zones-section">
         <div className="panel-heading"><div><p className="eyebrow">Monitored areas</p><h2>Restricted zones</h2></div></div>
-        {camera.restricted_zones.length === 0 ? <div className="directory-state"><ShieldCheck size={28} /><h2>No restricted zones</h2><p>Add zone drawing support after the camera connection workflow.</p></div>
+        {camera.restricted_zones.length === 0 ? <div className="directory-state"><ShieldCheck size={28} /><h2>No restricted zones</h2><p>Zone drawing will be added after frame ingestion.</p></div>
         : <div className="zone-cards">{camera.restricted_zones.map((zone) => <article key={zone.id}><div className="zone-icon"><ShieldCheck size={21} /></div><div><h3>{zone.name}</h3><p><MapPin size={14} /> Detection area</p></div><StatusPill status={zone.is_active ? "Active" : "Needs review"} /></article>)}</div>}
       </section>
+
+      <dialog ref={editDialogRef} className="form-dialog" onCancel={(event) => { if (saving) event.preventDefault(); }} onClick={(event) => { if (event.target === editDialogRef.current && !saving) editDialogRef.current?.close(); }}>
+        {form && <form className="dialog-card" onSubmit={saveCamera}>
+          <div className="dialog-heading"><div><p className="eyebrow">Camera settings</p><h2>Edit camera</h2><p>Update identity, source, and detection defaults.</p></div><button className="icon-button focus-ring" type="button" aria-label="Close edit camera dialog" disabled={saving} onClick={() => editDialogRef.current?.close()}><X size={20} /></button></div>
+          <div className="form-grid">
+            <label className="form-field"><span>Camera name</span><input autoFocus required minLength={2} maxLength={120} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+            <label className="form-field"><span>Location label</span><input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label>
+            <label className="form-field"><span>Source type</span><select value={form.sourceType} onChange={(event) => setForm({ ...form, sourceType: event.target.value as CameraDetail["source_type"] })}><option value="mobile">Mobile camera</option><option value="webcam">Webcam</option><option value="rtsp">CCTV / RTSP</option><option value="recorded_video">Recorded video</option></select></label>
+            <label className="form-field"><span>Confidence threshold (%)</span><input type="number" min={1} max={100} value={form.confidenceThreshold} onChange={(event) => setForm({ ...form, confidenceThreshold: Number(event.target.value) })} /></label>
+            <label className="form-field"><span>Confirmation delay (seconds)</span><input type="number" min={1} max={60} value={form.confirmationSeconds} onChange={(event) => setForm({ ...form, confirmationSeconds: Number(event.target.value) })} /></label>
+            <label className="camera-detection-choice"><input type="checkbox" checked={form.detectionEnabled} onChange={(event) => setForm({ ...form, detectionEnabled: event.target.checked })} /><span><strong>Enable detection</strong><small>Allow this camera to generate possible incidents.</small></span></label>
+          </div>
+          {error && <div className="auth-error" role="alert"><AlertCircle size={18} />{error}</div>}
+          <div className="dialog-actions"><button className="secondary-button focus-ring" type="button" disabled={saving} onClick={() => editDialogRef.current?.close()}>Cancel</button><button className="primary-button focus-ring" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={18} /> : <Edit3 size={18} />}{saving ? "Saving..." : "Save changes"}</button></div>
+        </form>}
+      </dialog>
+
+      <dialog ref={deleteDialogRef} className="form-dialog delete-dialog" onCancel={(event) => { if (deleting) event.preventDefault(); }} onClick={(event) => { if (event.target === deleteDialogRef.current && !deleting) deleteDialogRef.current?.close(); }}>
+        <form className="dialog-card" onSubmit={deleteCamera}>
+          <div className="dialog-heading"><div><p className="eyebrow danger-text">Permanent action</p><h2>Delete camera?</h2><p>This also permanently deletes its restricted zones, detection events, evidence references, and related notifications.</p></div><button className="icon-button focus-ring" type="button" aria-label="Close delete camera dialog" disabled={deleting} onClick={() => deleteDialogRef.current?.close()}><X size={20} /></button></div>
+          <div className="auth-notice warning"><AlertCircle size={20} /><div><strong>This cannot be undone</strong><p>Disable detection instead if you need to preserve historical incident data.</p></div></div>
+          <label className="form-field"><span>Type <strong>{camera.name}</strong> to confirm</span><input autoFocus value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" /></label>
+          {error && <div className="auth-error" role="alert"><AlertCircle size={18} />{error}</div>}
+          <div className="dialog-actions"><button className="secondary-button focus-ring" type="button" disabled={deleting} onClick={() => deleteDialogRef.current?.close()}>Keep camera</button><button className="delete-confirm-button focus-ring" type="submit" disabled={deleting || deleteConfirmation !== camera.name}>{deleting ? <LoaderCircle className="spin" size={18} /> : <Trash2 size={18} />}{deleting ? "Deleting..." : "Delete permanently"}</button></div>
+        </form>
+      </dialog>
     </>
   );
 }

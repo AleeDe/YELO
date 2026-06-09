@@ -14,6 +14,7 @@ import {
   Smartphone,
   Upload,
   Video,
+  Wifi,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
@@ -151,6 +152,15 @@ export default function RegisterCameraPage() {
           <div className="form-actions"><Link href="/cameras" className="secondary-button focus-ring">Cancel</Link><button type="submit" className="primary-button focus-ring" disabled={submitting || loadingSocieties || !societyId}>{submitting ? <LoaderCircle className="spin" size={18} /> : <Camera size={18} />}{submitting ? "Registering..." : "Register camera"}</button></div>
         </form>
       </div>
+      <section className="panel source-readiness" aria-labelledby="source-readiness-title">
+        <div className="panel-heading"><div><p className="eyebrow">Before you register</p><h2 id="source-readiness-title">How each source connects</h2></div></div>
+        <div className="source-readiness-grid">
+          <article><span className="source-readiness-icon available"><Smartphone size={21} /></span><div><span className="source-state available">Available now</span><h3>Mobile camera</h3><p>Register, copy the token, then open <Link href="/capture">YELO Capture</Link> on the phone. Pair it, allow camera permission, and start the rear camera.</p></div></article>
+          <article><span className="source-readiness-icon available"><Monitor size={21} /></span><div><span className="source-state available">Available now</span><h3>Webcam</h3><p>Open <Link href="/capture">YELO Capture</Link> on the laptop, paste the token, allow browser permission, and keep the tab open.</p></div></article>
+          <article><span className="source-readiness-icon gateway"><Wifi size={21} /></span><div><span className="source-state gateway">Gateway required</span><h3>CCTV / RTSP</h3><p>Register the camera now. Live ingestion needs a local MediaMTX or FFmpeg gateway because browsers cannot open raw RTSP streams.</p></div></article>
+          <article><span className="source-readiness-icon planned"><Upload size={21} /></span><div><span className="source-state planned">Planned</span><h3>Recorded video</h3><p>Registration is available, but MP4 upload and model inference will be implemented in the next processing milestone.</p></div></article>
+        </div>
+      </section>
     </>
   );
 }
