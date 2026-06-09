@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Camera,
+  ChevronDown,
   Clock3,
   Edit3,
   ExternalLink,
@@ -211,38 +212,47 @@ export default function CameraDetailPage() {
         <div><p className="eyebrow">{camera.id.slice(0, 8)}</p><h1>{camera.name}</h1><p className="page-subtitle">{camera.location_label || "No location label"} · {sourceLabels[camera.source_type]}</p></div>
         <div className="camera-heading-actions">
           <StatusPill status={status} />
-          {canManage && <button className="secondary-button focus-ring" type="button" onClick={openEditDialog}><Edit3 size={18} /> Edit camera</button>}
-          {canManage && <button className="danger-button focus-ring" type="button" onClick={() => { setDeleteConfirmation(""); setError(""); deleteDialogRef.current?.showModal(); }}><Trash2 size={17} /> Delete</button>}
+          {canManage && <button className="secondary-button focus-ring" type="button" onClick={openEditDialog}><Edit3 size={18} /> Camera settings</button>}
         </div>
       </div>
       {feedback && <div className="page-feedback success" role="status">{feedback}</div>}
       <div className="camera-detail-grid">
         <section className="panel live-panel">
-          <div className="panel-heading"><div><p className="eyebrow">Camera source</p><h2>Preview</h2></div>{(camera.source_type === "mobile" || camera.source_type === "webcam") && <Link className="secondary-button focus-ring" href="/capture">Open capture <ExternalLink size={17} /></Link>}</div>
-          <div className="live-preview"><Camera size={48} /><p>Live preview will appear here after frame ingestion is connected to the dashboard.</p></div>
+          <div className="panel-heading">
+            <div><p className="eyebrow">Camera source</p><h2>{camera.status === "online" ? "Live camera" : "Camera is offline"}</h2></div>
+            {(camera.source_type === "mobile" || camera.source_type === "webcam") && <Link className="primary-button focus-ring camera-connect-action" href="/capture">Connect camera <ExternalLink size={17} /></Link>}
+          </div>
+          <div className="live-preview">
+            <span className="preview-empty-icon"><Camera size={34} /></span>
+            <strong>{camera.status === "online" ? "Waiting for video frames" : "No live video"}</strong>
+            <p>{camera.status === "online" ? "The device heartbeat is active. Dashboard frame streaming is the next milestone." : "Connect the registered device to bring this camera online."}</p>
+          </div>
         </section>
-        <aside className="camera-info-stack">
-          <section className="panel detail-card"><h2>Connection health</h2><dl className="detail-list">
+        <aside className="panel camera-summary-card" aria-label="Camera status summary">
+          <div className="camera-summary-heading"><div><p className="eyebrow">At a glance</p><h2>Camera status</h2></div><StatusPill status={status} /></div>
+          <dl className="camera-summary-grid">
             <div><dt><Wifi size={16} /> Status</dt><dd>{status}</dd></div>
             <div><dt><Camera size={16} /> Source</dt><dd>{sourceLabels[camera.source_type]}</dd></div>
             <div><dt><Clock3 size={16} /> Last contact</dt><dd>{camera.last_seen_at ? new Date(camera.last_seen_at).toLocaleString() : "Never"}</dd></div>
-          </dl></section>
-          <section className="panel detail-card"><h2>Detection</h2><dl className="detail-list">
             <div><dt>Enabled</dt><dd>{camera.detection_enabled ? "Yes" : "No"}</dd></div>
             <div><dt>Confidence threshold</dt><dd>{Math.round(Number(camera.confidence_threshold) * 100)}%</dd></div>
             <div><dt>Confirmation delay</dt><dd>{camera.confirmation_seconds} seconds</dd></div>
-          </dl></section>
+          </dl>
         </aside>
       </div>
 
-      <section className="panel connection-guide">
-        <div className="connection-guide-heading">
-          <div><p className="eyebrow">Connection guide</p><h2>{guidance.title}</h2></div>
-          <span>{guidance.state}</span>
+      <details className="panel connection-guide">
+        <summary className="focus-ring">
+          <span className="connection-summary-icon"><Wifi size={20} /></span>
+          <span><small>Connection guide</small><strong>{guidance.title}</strong></span>
+          <span className="connection-state">{guidance.state}</span>
+          <ChevronDown className="connection-chevron" size={20} aria-hidden="true" />
+        </summary>
+        <div className="connection-guide-content">
+          <ol>{guidance.steps.map((step, index) => <li key={step}><span>{index + 1}</span><p>{step}</p></li>)}</ol>
+          <div className="connection-note"><AlertCircle size={19} /><p>{guidance.note}</p></div>
         </div>
-        <ol>{guidance.steps.map((step, index) => <li key={step}><span>{index + 1}</span><p>{step}</p></li>)}</ol>
-        <div className="connection-note"><AlertCircle size={19} /><p>{guidance.note}</p></div>
-      </section>
+      </details>
 
       <section className="panel zones-section">
         <div className="panel-heading"><div><p className="eyebrow">Monitored areas</p><h2>Restricted zones</h2></div></div>
@@ -262,6 +272,7 @@ export default function CameraDetailPage() {
             <label className="camera-detection-choice"><input type="checkbox" checked={form.detectionEnabled} onChange={(event) => setForm({ ...form, detectionEnabled: event.target.checked })} /><span><strong>Enable detection</strong><small>Allow this camera to generate possible incidents.</small></span></label>
           </div>
           {error && <div className="auth-error" role="alert"><AlertCircle size={18} />{error}</div>}
+          <div className="camera-dialog-danger"><div><strong>Remove this camera</strong><p>Deleting also removes its incident history and zones.</p></div><button className="danger-button focus-ring" type="button" disabled={saving} onClick={() => { editDialogRef.current?.close(); setDeleteConfirmation(""); setError(""); deleteDialogRef.current?.showModal(); }}><Trash2 size={17} /> Delete camera</button></div>
           <div className="dialog-actions"><button className="secondary-button focus-ring" type="button" disabled={saving} onClick={() => editDialogRef.current?.close()}>Cancel</button><button className="primary-button focus-ring" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={18} /> : <Edit3 size={18} />}{saving ? "Saving..." : "Save changes"}</button></div>
         </form>}
       </dialog>
