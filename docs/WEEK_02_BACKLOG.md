@@ -17,8 +17,8 @@ Week 2 begins after the existing repository and local environment are verified.
 - [x] Create database enums and tables
 - [x] Enable Row Level Security
 - [x] Add society membership policies
-- Seed one super admin
-- Create society management APIs
+- [x] Seed one super admin
+- [x] Create society management APIs
 - Add society member invitations
 
 ## Camera Registration

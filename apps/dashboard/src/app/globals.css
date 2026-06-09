@@ -2686,7 +2686,7 @@ h3 {
 
 .society-directory article {
   display: grid;
-  grid-template-columns: auto minmax(190px, 1.5fr) minmax(130px, 0.8fr) 80px 80px auto auto;
+  grid-template-columns: auto minmax(190px, 1.5fr) minmax(130px, 0.8fr) 80px 80px auto 100px;
   align-items: center;
   gap: 14px;
   min-height: 88px;
@@ -2718,6 +2718,135 @@ h3 {
 
 .society-directory article > div:not(.directory-name) {
   display: grid;
+}
+
+.society-directory time,
+.toolbar-count {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.toolbar-count {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.directory-state {
+  display: grid;
+  min-height: 280px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 32px;
+  text-align: center;
+}
+
+.directory-state > svg {
+  color: var(--primary);
+}
+
+.directory-state.error > svg {
+  color: var(--danger);
+}
+
+.directory-state h2,
+.directory-state p {
+  margin: 0;
+}
+
+.directory-state p {
+  max-width: 520px;
+  color: var(--text-muted);
+}
+
+.page-feedback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.page-feedback.success {
+  border-color: #addbc4;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.form-dialog {
+  width: min(680px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  border: 0;
+  border-radius: 18px;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.form-dialog::backdrop {
+  background: rgb(9 30 22 / 58%);
+  backdrop-filter: blur(3px);
+}
+
+.dialog-card {
+  display: grid;
+  gap: 22px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgb(9 30 22 / 24%);
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dialog-heading h2,
+.dialog-heading p {
+  margin: 0;
+}
+
+.dialog-heading h2 {
+  margin-top: 4px;
+  font-size: 24px;
+}
+
+.dialog-heading > div > p:last-child {
+  margin-top: 5px;
+  color: var(--text-muted);
+}
+
+.form-field small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+
+.spin {
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .operator-queue {
@@ -2990,6 +3119,10 @@ h3 {
   .society-directory article > div:not(.directory-name),
   .society-directory article > .status-pill {
     display: none;
+  }
+
+  .society-directory time {
+    justify-self: end;
   }
 
   .operator-queue article {
@@ -3630,6 +3763,28 @@ h3 {
   .society-health-list article,
   .society-directory article {
     align-items: start;
+  }
+
+  .form-dialog {
+    width: calc(100% - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
+  .dialog-card {
+    max-height: calc(100dvh - 20px);
+    gap: 18px;
+    border-radius: 14px;
+    padding: 18px;
+  }
+
+  .dialog-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .dialog-actions button {
+    justify-content: center;
+    width: 100%;
   }
 
   .operator-queue article {
