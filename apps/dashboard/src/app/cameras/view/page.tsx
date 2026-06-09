@@ -220,7 +220,7 @@ export default function CameraDetailPage() {
         <section className="panel live-panel">
           <div className="panel-heading">
             <div><p className="eyebrow">Camera source</p><h2>{camera.status === "online" ? "Live camera" : "Camera is offline"}</h2></div>
-            {(camera.source_type === "mobile" || camera.source_type === "webcam") && <Link className="primary-button focus-ring camera-connect-action" href="/capture">Connect camera <ExternalLink size={17} /></Link>}
+            {(camera.source_type === "mobile" || camera.source_type === "webcam") && <Link className="primary-button focus-ring camera-connect-action" href={`/capture?returnTo=${encodeURIComponent(`/cameras/view?id=${camera.id}`)}`}>Connect camera <ExternalLink size={17} /></Link>}
           </div>
           <div className="live-preview">
             <span className="preview-empty-icon"><Camera size={34} /></span>

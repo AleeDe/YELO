@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { KeyRound, Mail, ShieldCheck, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { PageHeader } from "@/components/ui";
@@ -20,7 +21,7 @@ export default function AccountPage() {
       </section>
       <aside className="account-side">
         <section className="panel account-action-card"><Mail size={21} /><div><strong>Email verified</strong><p>Your Supabase sign-in email is active.</p></div><ShieldCheck size={19} /></section>
-        <section className="panel account-action-card"><KeyRound size={21} /><div><strong>Password security</strong><p>Use password recovery to rotate your password securely.</p></div><a href="/auth/forgot-password" className="table-action focus-ring">Reset</a></section>
+        <section className="panel account-action-card"><KeyRound size={21} /><div><strong>Password security</strong><p>Use password recovery to rotate your password securely.</p></div><Link href="/auth/forgot-password" className="table-action focus-ring">Reset</Link></section>
       </aside>
     </div>
   </>;

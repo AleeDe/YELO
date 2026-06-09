@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  ArrowLeft,
   Camera,
   CameraOff,
   CheckCircle2,
@@ -11,6 +12,7 @@ import {
   Smartphone,
   Unplug,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
@@ -45,8 +47,10 @@ function cameraErrorMessage(error: unknown) {
 }
 
 export default function CapturePage() {
+  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const returnPathRef = useRef("/cameras");
   const [token, setToken] = useState("");
   const [camera, setCamera] = useState<CameraInfo | null>(null);
   const [pairing, setPairing] = useState(false);
@@ -59,6 +63,10 @@ export default function CapturePage() {
   useEffect(() => {
     const restoreToken = window.setTimeout(() => {
       setToken(window.sessionStorage.getItem(tokenStorageKey) ?? "");
+      const requestedPath = new URLSearchParams(window.location.search).get("returnTo");
+      if (requestedPath?.startsWith("/") && !requestedPath.startsWith("//")) {
+        returnPathRef.current = requestedPath;
+      }
     }, 0);
     return () => {
       window.clearTimeout(restoreToken);
@@ -73,6 +81,7 @@ export default function CapturePage() {
 
     const response = await fetch(`${supabaseUrl}/functions/v1/camera-device`, {
       method: "POST",
+      keepalive: action === "disconnect",
       headers: {
         apikey: supabaseAnonKey,
         "Content-Type": "application/json",
@@ -203,12 +212,24 @@ export default function CapturePage() {
     }
   }
 
+  function leaveCapture() {
+    stopTracks();
+    if (camera && token) void callDevice("disconnect", token).catch(() => undefined);
+    router.push(returnPathRef.current);
+  }
+
   return (
     <main className="capture-page">
       <header className="capture-header">
-        <div className="capture-brand" aria-label="YELO camera">
-          <span className="capture-brand-mark" aria-hidden="true">Y</span>
-          <span><strong>YELO Capture</strong><small>Mobile and webcam source</small></span>
+        <div className="capture-header-start">
+          <button className="capture-back-button focus-ring" type="button" onClick={leaveCapture} aria-label="Back to camera dashboard">
+            <ArrowLeft size={21} />
+            <span>Back</span>
+          </button>
+          <div className="capture-brand" aria-label="YELO camera">
+            <span className="capture-brand-mark" aria-hidden="true">Y</span>
+            <span><strong>YELO Capture</strong><small>Mobile and webcam source</small></span>
+          </div>
         </div>
         <div className={`capture-connection ${camera ? "connected" : ""}`} role="status">
           <span aria-hidden="true" />

@@ -4869,6 +4869,34 @@ h3 {
   padding: 12px clamp(18px, 4vw, 56px);
 }
 
+.capture-header-start {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.capture-back-button {
+  display: inline-flex;
+  min-width: 48px;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.capture-back-button:hover {
+  border-color: #9eb9ae;
+  background: var(--surface-muted);
+}
+
 .capture-brand {
   display: flex;
   align-items: center;
@@ -5198,6 +5226,26 @@ h3 {
 
   .capture-brand small {
     display: none;
+  }
+
+  .capture-header-start {
+    gap: 9px;
+  }
+
+  .capture-back-button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .capture-back-button span {
+    display: none;
+  }
+
+  .capture-brand-mark {
+    width: 40px;
+    height: 40px;
   }
 
   .capture-connection {
