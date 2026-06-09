@@ -101,7 +101,7 @@ a {
   border-right: 1px solid var(--border);
   background: var(--surface);
   padding: 24px 18px;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .brand {
@@ -212,7 +212,13 @@ a {
 }
 
 .desktop-nav {
+  min-height: 0;
+  flex: 1 1 auto;
   margin-top: 30px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #b5c1bc transparent;
 }
 
 .nav-label {
@@ -267,7 +273,7 @@ a {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin-top: auto;
+  margin-top: 16px;
   border: 1px solid var(--border);
   border-radius: 13px;
   background: var(--surface-muted);
@@ -307,6 +313,7 @@ a {
 
 .user-menu-wrap {
   position: relative;
+  flex: 0 0 auto;
 }
 
 .rotate-icon {
@@ -316,8 +323,12 @@ a {
 .popover-menu {
   position: absolute;
   z-index: 50;
-  width: 300px;
-  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: white;
@@ -330,8 +341,9 @@ a {
 }
 
 .user-popover {
-  right: 0;
+  right: auto;
   bottom: calc(100% + 8px);
+  left: 0;
 }
 
 .popover-heading,
