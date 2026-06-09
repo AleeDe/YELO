@@ -26,8 +26,8 @@ Week 2 begins after the existing repository and local environment are verified.
 - [x] Create camera table and policies
 - [x] Add camera list page
 - [x] Add camera registration form
-- Generate a one-time device token
-- Store only the token hash
+- [x] Generate a one-time device token
+- [x] Store only the token hash
 - [x] Add camera status and heartbeat fields
 
 ## Static UI Prototype
