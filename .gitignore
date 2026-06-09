@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Supabase CLI local state
+supabase/.temp/
+
+# Local logs and editor files
+*.log
+.DS_Store
+Thumbs.db
+

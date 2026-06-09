@@ -12,21 +12,21 @@ Week 2 begins after the existing repository and local environment are verified.
 
 ## Multi-Society Foundation
 
-- Create database enums and tables
-- Enable Row Level Security
-- Add society membership policies
+- [x] Create database enums and tables
+- [x] Enable Row Level Security
+- [x] Add society membership policies
 - Seed one super admin
 - Create society management APIs
 - Add society member invitations
 
 ## Camera Registration
 
-- Create camera table and policies
+- [x] Create camera table and policies
 - Add camera list page
 - Add camera registration form
 - Generate a one-time device token
 - Store only the token hash
-- Add camera status and heartbeat fields
+- [x] Add camera status and heartbeat fields
 
 ## Verification
 
@@ -41,4 +41,3 @@ Week 2 begins after the existing repository and local environment are verified.
 A super admin can create societies and assign administrators. A society
 administrator can sign in and register cameras, while Supabase prevents access
 to every other society's data.
-

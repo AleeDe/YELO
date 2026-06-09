@@ -1,0 +1,2 @@
+-- Seed data will be added after the first super admin account is created.
+-- Keep production identities and credentials out of source control.
