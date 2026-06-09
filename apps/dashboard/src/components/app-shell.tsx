@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import {
   AlertTriangle,
   BarChart3,
@@ -78,6 +79,7 @@ function Brand({ home }: { home: string }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const auth = useAuth();
   const [role, setRole] = useState<Role>(() =>
     pathname.startsWith("/super-admin") ? "super_admin" : pathname.startsWith("/operator") ? "operator" : "society_admin",
   );
@@ -89,7 +91,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const userRef = useRef<HTMLDivElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
-  const config = roleConfig[role];
+  const effectiveRole = auth.role ?? role;
+  const config = roleConfig[effectiveRole];
+  const userName =
+    auth.user?.user_metadata.full_name ||
+    auth.user?.email?.split("@")[0] ||
+    "Ali Hassan";
+  const userEmail = auth.user?.email ?? "ali@example.com";
+  const userInitials = userName
+    .split(" ")
+    .map((part: string) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   useEffect(() => {
     window.localStorage.setItem("yelo-demo-role", role);
@@ -131,6 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 
   function changeRole(nextRole: Role) {
+    if (auth.configured) return;
     setRole(nextRole);
     setUserOpen(false);
     setMobileMenuOpen(false);
@@ -142,13 +157,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
   }
 
+  if (pathname.startsWith("/auth")) return <>{children}</>;
+  if (auth.configured && (auth.loading || !auth.user)) {
+    return (
+      <main className="auth-loading" role="status" aria-live="polite">
+        <span className="loading-mark">Y</span>
+        <strong>Checking your secure session...</strong>
+      </main>
+    );
+  }
+
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <aside className="sidebar" aria-label="Primary navigation">
         <Brand home={config.home} />
         <div className="society-switcher" ref={societyRef}>
-          <span className="eyebrow">{role === "super_admin" ? "Society context" : "Current society"}</span>
+          <span className="eyebrow">{effectiveRole === "super_admin" ? "Society context" : "Current society"}</span>
           <button
             className="society-button focus-ring"
             type="button"
@@ -175,7 +200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {society.name === item.name && <Check size={17} aria-hidden="true" />}
                 </button>
               ))}
-              {role === "super_admin" && <Link href="/super-admin/societies" className="popover-link" onClick={() => setSocietyOpen(false)}><Building2 size={17} /> Manage all societies</Link>}
+              {effectiveRole === "super_admin" && <Link href="/super-admin/societies" className="popover-link" onClick={() => setSocietyOpen(false)}><Building2 size={17} /> Manage all societies</Link>}
             </div>
           )}
         </div>
@@ -200,29 +225,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="sidebar-status">
           <div className="status-icon success" aria-hidden="true"><ShieldCheck size={20} /></div>
-          <div><strong>Detection service active</strong><p>{role === "super_admin" ? "24 cameras across 3 societies" : "11 cameras are processing"}</p></div>
+          <div><strong>Detection service active</strong><p>{effectiveRole === "super_admin" ? "24 cameras across 3 societies" : "11 cameras are processing"}</p></div>
         </div>
 
         <div className="user-menu-wrap" ref={userRef}>
           <button className="user-menu focus-ring" type="button" aria-expanded={userOpen} aria-haspopup="menu" onClick={() => setUserOpen((open) => !open)}>
-            <span className="user-avatar" aria-hidden="true">AH</span>
-            <span><strong>Ali Hassan</strong><small>{config.label}</small></span>
+            <span className="user-avatar" aria-hidden="true">{userInitials}</span>
+            <span><strong>{userName}</strong><small>{config.label}</small></span>
             <MoreHorizontal size={20} aria-hidden="true" />
           </button>
           {userOpen && (
             <div className="popover-menu user-popover" role="menu" aria-label="Account and role menu">
-              <div className="popover-profile"><span className="user-avatar">AH</span><span><strong>Ali Hassan</strong><small>ali@example.com</small></span></div>
-              <div className="menu-separator" />
-              <span className="menu-label">Preview dashboard as</span>
-              {(Object.keys(roleConfig) as Role[]).map((item) => (
-                <button key={item} role="menuitemradio" aria-checked={role === item} onClick={() => changeRole(item)}>
-                  <UserCog size={18} /><span><strong>{roleConfig[item].label}</strong><small>{item === "super_admin" ? "Manage the complete platform" : item === "operator" ? "Review assigned incidents" : "Manage one society"}</small></span>
-                  {role === item && <Check size={17} />}
-                </button>
-              ))}
+              <div className="popover-profile"><span className="user-avatar">{userInitials}</span><span><strong>{userName}</strong><small>{userEmail}</small></span></div>
+              {!auth.configured && <>
+                <div className="menu-separator" />
+                <span className="menu-label">Preview dashboard as</span>
+                {(Object.keys(roleConfig) as Role[]).map((item) => (
+                  <button key={item} role="menuitemradio" aria-checked={role === item} onClick={() => changeRole(item)}>
+                    <UserCog size={18} /><span><strong>{roleConfig[item].label}</strong><small>{item === "super_admin" ? "Manage the complete platform" : item === "operator" ? "Review assigned incidents" : "Manage one society"}</small></span>
+                    {role === item && <Check size={17} />}
+                  </button>
+                ))}
+              </>}
               <div className="menu-separator" />
               <Link href="/settings" className="popover-link" onClick={() => setUserOpen(false)}><Settings size={17} /> Account settings</Link>
-              <button className="logout-item" role="menuitem"><LogOut size={17} /> Sign out</button>
+              <button className="logout-item" role="menuitem" onClick={() => void auth.signOut()}><LogOut size={17} /> Sign out</button>
             </div>
           )}
         </div>
@@ -275,12 +302,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <div className="mobile-sheet-section">
-              <p className="menu-label">Preview role</p>
-              <div className="mobile-choice-list">
-                {(Object.keys(roleConfig) as Role[]).map((item) => <button key={item} className="mobile-choice focus-ring" onClick={() => changeRole(item)}><UserCog size={19} /><span><strong>{roleConfig[item].label}</strong><small>{item === "operator" ? "Review incidents" : item === "super_admin" ? "Manage platform" : "Manage society"}</small></span>{role === item && <Check size={18} />}</button>)}
-              </div>
+              {!auth.configured && <>
+                <p className="menu-label">Preview role</p>
+                <div className="mobile-choice-list">
+                  {(Object.keys(roleConfig) as Role[]).map((item) => <button key={item} className="mobile-choice focus-ring" onClick={() => changeRole(item)}><UserCog size={19} /><span><strong>{roleConfig[item].label}</strong><small>{item === "operator" ? "Review incidents" : item === "super_admin" ? "Manage platform" : "Manage society"}</small></span>{role === item && <Check size={18} />}</button>)}
+                </div>
+              </>}
             </div>
-            <button className="mobile-signout focus-ring" type="button"><LogOut size={18} /> Sign out</button>
+            <button className="mobile-signout focus-ring" type="button" onClick={() => void auth.signOut()}><LogOut size={18} /> Sign out</button>
           </section>
         </div>
       )}

@@ -14,6 +14,21 @@ npm run dev
 Set the public Supabase URL and anonymous key in `.env.local`. Never place a
 Supabase service-role key in this application.
 
+## Authentication Setup
+
+1. Open the Supabase project dashboard.
+2. Go to **Project Settings > API Keys**.
+3. Copy the public `anon` or publishable key into
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`.
+4. In **Authentication > URL Configuration**, add:
+   - `http://localhost:3000/auth/update-password`
+   - `http://192.168.1.3:3000/auth/update-password`
+   - The production HTTPS callback when deployed
+5. Create users in Supabase Authentication and assign their access in
+   `profiles` and `society_members`.
+
+Never use the `service_role` or secret key in the browser application.
+
 ## Checks
 
 ```bash

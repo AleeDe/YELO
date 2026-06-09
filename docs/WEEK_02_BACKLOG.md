@@ -4,11 +4,13 @@ Week 2 begins after the existing repository and local environment are verified.
 
 ## Authentication
 
-- Configure Supabase browser and server clients
-- Add sign-in and sign-out
-- Add protected dashboard layout
-- Create profile automatically after signup
-- Add platform-role authorization
+- [x] Configure Supabase browser client
+- [x] Add sign-in and sign-out
+- [x] Add password recovery and update flow
+- [x] Add protected dashboard layout
+- [x] Create profile automatically after signup
+- [x] Add platform-role authorization
+- [x] Route users to role-specific dashboards
 
 ## Multi-Society Foundation
 
