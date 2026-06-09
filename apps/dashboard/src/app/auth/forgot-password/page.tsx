@@ -24,7 +24,10 @@ export default function ForgotPasswordPage() {
     );
     setSubmitting(false);
     if (resetError) setError(resetError.message);
-    else setSent(true);
+    else {
+      window.localStorage.setItem("yelo-recovery-email", email.trim().toLowerCase());
+      setSent(true);
+    }
   }
 
   return (

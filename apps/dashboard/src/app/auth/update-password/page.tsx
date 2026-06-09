@@ -70,9 +70,17 @@ export default function UpdatePasswordPage() {
     const { error: updateError } = await auth.client.auth.updateUser({ password });
     if (updateError) setError(updateError.message);
     else {
+      const { data: sessionData } = await auth.client.auth.getSession();
+      const accountEmail = sessionData.session?.user.email;
+      if (accountEmail) {
+        window.localStorage.setItem("yelo-recovery-email", accountEmail.toLowerCase());
+      }
       setSaved(true);
       await auth.client.auth.signOut();
-      window.setTimeout(() => router.replace("/auth/sign-in"), 1200);
+      const signInUrl = accountEmail
+        ? `/auth/sign-in?email=${encodeURIComponent(accountEmail)}&passwordUpdated=1`
+        : "/auth/sign-in?passwordUpdated=1";
+      window.setTimeout(() => router.replace(signInUrl), 1200);
     }
   }
 
