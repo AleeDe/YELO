@@ -221,15 +221,9 @@ export default function CapturePage() {
   return (
     <main className="capture-page">
       <header className="capture-header">
-        <div className="capture-header-start">
-          <button className="capture-back-button focus-ring" type="button" onClick={leaveCapture} aria-label="Back to camera dashboard">
-            <ArrowLeft size={21} />
-            <span>Back</span>
-          </button>
-          <div className="capture-brand" aria-label="YELO camera">
-            <span className="capture-brand-mark" aria-hidden="true">Y</span>
-            <span><strong>YELO Capture</strong><small>Mobile and webcam source</small></span>
-          </div>
+        <div className="capture-brand" aria-label="YELO camera">
+          <span className="capture-brand-mark" aria-hidden="true">Y</span>
+          <span><strong>YELO Capture</strong><small>Mobile and webcam source</small></span>
         </div>
         <div className={`capture-connection ${camera ? "connected" : ""}`} role="status">
           <span aria-hidden="true" />
@@ -237,13 +231,20 @@ export default function CapturePage() {
         </div>
       </header>
 
-      <div className="capture-layout">
+      <nav className="capture-context-nav" aria-label="Capture navigation">
+        <button className="capture-back-link focus-ring" type="button" onClick={leaveCapture}>
+          <ArrowLeft size={18} />
+          <span>Back to cameras</span>
+        </button>
+      </nav>
+
+      <div className={`capture-layout ${camera ? "paired" : "unpaired"}`}>
         <section className="capture-stage" aria-labelledby="capture-title">
           <div className="capture-stage-heading">
             <div>
               <p className="eyebrow">Monitoring source</p>
-              <h1 id="capture-title">{camera?.name ?? "Connect this camera"}</h1>
-              <p>{camera?.location_label ?? "Pair a registered YELO camera to begin the live preview."}</p>
+              <h1 id="capture-title">{camera?.name ?? "Camera preview"}</h1>
+              <p>{camera?.location_label ?? "The preview becomes available after this device is securely paired."}</p>
             </div>
             {camera && (
               <span className="capture-secure-badge"><ShieldCheck size={18} /> Token verified</span>

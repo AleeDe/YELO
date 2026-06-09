@@ -7,6 +7,7 @@ These rules apply to every new or modified YELO interface.
 - Give each screen one obvious primary task.
 - Every standalone or full-screen workflow must provide a visible back or close action.
 - Back actions must preserve context and use client-side navigation.
+- Keep product identity in the header; place contextual back navigation with page content unless the platform convention requires otherwise.
 - Keep destructive actions away from the primary action area.
 - Use progressive disclosure for setup instructions and advanced settings.
 - Show the most important status and next action before supporting details.

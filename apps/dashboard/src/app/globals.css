@@ -4869,34 +4869,6 @@ h3 {
   padding: 12px clamp(18px, 4vw, 56px);
 }
 
-.capture-header-start {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 14px;
-}
-
-.capture-back-button {
-  display: inline-flex;
-  min-width: 48px;
-  min-height: 48px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: white;
-  color: var(--text);
-  font: inherit;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.capture-back-button:hover {
-  border-color: #9eb9ae;
-  background: var(--surface-muted);
-}
-
 .capture-brand {
   display: flex;
   align-items: center;
@@ -4955,6 +4927,33 @@ h3 {
   box-shadow: 0 0 0 4px rgba(11, 154, 112, 0.12);
 }
 
+.capture-context-nav {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 18px clamp(24px, 4vw, 56px) 0;
+}
+
+.capture-back-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  padding: 0 10px 0 6px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.capture-back-link:hover {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--primary-dark);
+}
+
 .capture-layout {
   display: grid;
   max-width: 1440px;
@@ -4962,6 +4961,32 @@ h3 {
   gap: clamp(20px, 3vw, 40px);
   margin: 0 auto;
   padding: clamp(24px, 4vw, 56px);
+}
+
+.capture-layout.unpaired {
+  max-width: 1240px;
+  grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+  grid-template-areas: "control stage";
+  align-items: start;
+  padding-top: 22px;
+}
+
+.capture-layout.unpaired .capture-control {
+  grid-area: control;
+}
+
+.capture-layout.unpaired .capture-stage {
+  grid-area: stage;
+}
+
+.capture-layout.unpaired .capture-video-frame {
+  min-height: 0;
+  aspect-ratio: 16 / 10;
+  box-shadow: 0 14px 34px rgba(24, 54, 43, 0.1);
+}
+
+.capture-layout.unpaired .capture-stage-heading h1 {
+  font-size: clamp(28px, 3vw, 38px);
 }
 
 .capture-stage {
@@ -5209,8 +5234,12 @@ h3 {
 }
 
 @media (max-width: 900px) {
-  .capture-layout {
+  .capture-layout,
+  .capture-layout.unpaired {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "control"
+      "stage";
   }
 
   .capture-control {
@@ -5225,21 +5254,6 @@ h3 {
   }
 
   .capture-brand small {
-    display: none;
-  }
-
-  .capture-header-start {
-    gap: 9px;
-  }
-
-  .capture-back-button {
-    width: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0;
-  }
-
-  .capture-back-button span {
     display: none;
   }
 
@@ -5259,6 +5273,16 @@ h3 {
     padding: 18px 14px 32px;
   }
 
+  .capture-context-nav {
+    padding: 10px 10px 0;
+  }
+
+  .capture-back-link {
+    min-height: 46px;
+    padding-right: 12px;
+    padding-left: 8px;
+  }
+
   .capture-stage-heading {
     min-height: auto;
     flex-direction: column;
@@ -5272,6 +5296,10 @@ h3 {
   .capture-video-frame {
     min-height: 210px;
     border-radius: 14px;
+  }
+
+  .capture-layout.unpaired .capture-video-frame {
+    aspect-ratio: 4 / 3;
   }
 
   .capture-actions,
