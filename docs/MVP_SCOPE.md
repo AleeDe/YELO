@@ -1,0 +1,49 @@
+# YELO MVP Scope
+
+## Must Have
+
+- Email/password authentication
+- Super admin, society admin, and operator roles
+- Multiple societies
+- Multiple cameras per society
+- Society-level data isolation
+- Mobile camera support
+- Webcam support
+- Recorded-video testing
+- Per-camera restricted zones
+- Person and common waste-object detection
+- Object tracking
+- Possible littering event generation
+- Evidence image storage
+- Realtime dashboard notification
+- Incident review and status updates
+- Basic society and camera analytics
+
+## Should Have
+
+- Short evidence clips
+- Camera online/offline status
+- Configurable confidence and delay
+- Email notification
+- Audit logs
+- Dataset feedback from false-positive reviews
+
+## Could Have
+
+- CCTV RTSP integration
+- Multiple restricted zones per camera
+- Push notifications
+- Heatmaps
+- Scheduled monitoring
+- Exportable incident reports
+
+## Not in the MVP
+
+- Face recognition
+- Automatic person identification
+- Automatic fines or legal action
+- Number-plate recognition
+- Guaranteed detection of tiny or hidden waste
+- Unlimited continuous cloud video recording
+- Large-scale 24/7 cloud inference
+
