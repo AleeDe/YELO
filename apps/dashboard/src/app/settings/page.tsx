@@ -27,6 +27,12 @@ export default function SettingsPage() {
     <>
       <PageHeader eyebrow="Configuration" title="Settings" description="Manage society details, defaults, privacy, and notification behavior." />
       <div className="settings-layout">
+        <label className="mobile-settings-select">
+          <span>Settings section</span>
+          <select value={activeTab} onChange={(event) => setActiveTab(event.target.value as TabId)}>
+            {settingsNav.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}
+          </select>
+        </label>
         <nav className="settings-nav" aria-label="Settings sections">
           {settingsNav.map((item) => {
             const Icon = item.icon;

@@ -36,12 +36,12 @@ export default function IncidentsPage() {
             <tbody>
               {incidents.map((incident) => (
                 <tr key={incident.id}>
-                  <td><strong>{incident.object}</strong><small>{incident.id} · {incident.zone}</small></td>
-                  <td><strong>{incident.camera}</strong><small>{incident.location}</small></td>
-                  <td><span>{incident.time}</span><small>{incident.date}</small></td>
-                  <td><span className="confidence-value">{incident.confidence}%</span></td>
-                  <td><StatusPill status={incident.status} /></td>
-                  <td><Link className="table-action focus-ring" href={`/incidents/${incident.id}`}>Review</Link></td>
+                  <td data-label="Incident"><strong>{incident.object}</strong><small>{incident.id} · {incident.zone}</small></td>
+                  <td data-label="Source"><strong>{incident.camera}</strong><small>{incident.location}</small></td>
+                  <td data-label="Detected"><span>{incident.time}</span><small>{incident.date}</small></td>
+                  <td data-label="Confidence"><span className="confidence-value">{incident.confidence}%</span></td>
+                  <td data-label="Status"><StatusPill status={incident.status} /></td>
+                  <td data-label="Action"><Link className="table-action focus-ring" href={`/incidents/${incident.id}`}>Review evidence</Link></td>
                 </tr>
               ))}
             </tbody>
@@ -52,4 +52,3 @@ export default function IncidentsPage() {
     </>
   );
 }
-

@@ -42,6 +42,10 @@ Week 2 begins after the existing repository and local environment are verified.
 - [x] Add account and role switcher menu
 - [x] Build Super Admin dashboard
 - [x] Build Operator dashboard
+- [x] Add complete mobile navigation and context menu
+- [x] Convert dense incident tables to mobile cards
+- [x] Add responsive settings section selector
+- [x] Verify desktop, tablet, mobile, and narrow layouts
 - [x] Synchronize all static routes to Capacitor
 
 ## Verification

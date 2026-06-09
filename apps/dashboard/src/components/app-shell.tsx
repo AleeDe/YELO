@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   LayoutDashboard,
   LogOut,
+  Menu,
   MoreHorizontal,
   Settings,
   ShieldCheck,
@@ -83,13 +84,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [society, setSociety] = useState(societies[0]);
   const [societyOpen, setSocietyOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const societyRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const config = roleConfig[role];
 
   useEffect(() => {
     window.localStorage.setItem("yelo-demo-role", role);
   }, [role]);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+    if (mobileMenuOpen) {
+      window.requestAnimationFrame(() => mobileCloseButtonRef.current?.focus());
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     function closeMenus(event: MouseEvent) {
@@ -101,6 +115,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (event.key === "Escape") {
         setSocietyOpen(false);
         setUserOpen(false);
+        setMobileMenuOpen(false);
+        window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
       }
     }
     document.addEventListener("mousedown", closeMenus);
@@ -117,7 +133,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   function changeRole(nextRole: Role) {
     setRole(nextRole);
     setUserOpen(false);
+    setMobileMenuOpen(false);
     router.push(roleConfig[nextRole].home);
+  }
+
+  function closeMobileMenu() {
+    setMobileMenuOpen(false);
+    window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
   }
 
   return (
@@ -209,7 +231,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="app-content">
         <header className="mobile-header">
           <Brand home={config.home} />
-          <button className="icon-button focus-ring" type="button" aria-label="Notifications, 6 unread"><Bell size={21} /><span className="notification-dot" /></button>
+          <div className="mobile-header-actions">
+            <button className="icon-button focus-ring" type="button" aria-label="Notifications, 6 unread"><Bell size={21} /><span className="notification-dot" /></button>
+            <button ref={mobileMenuButtonRef} className="icon-button focus-ring" type="button" aria-label="Open navigation and account menu" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}><Menu size={22} /></button>
+          </div>
         </header>
         <main id="main-content" className="main-content">{children}</main>
       </div>
@@ -220,8 +245,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           const current = isCurrent(item.href);
           return <Link key={item.label} href={item.href} className={`mobile-nav-link focus-ring ${current ? "active" : ""}`} aria-current={current ? "page" : undefined}><Icon size={21} /><span>{item.label}</span>{"count" in item && item.count && <span className="mobile-badge">{item.count}</span>}</Link>;
         })}
-        <Link href="/settings" className={`mobile-nav-link focus-ring ${pathname === "/settings" ? "active" : ""}`}><MoreHorizontal size={21} /><span>More</span></Link>
+        <button className={`mobile-nav-link focus-ring ${mobileMenuOpen ? "active" : ""}`} type="button" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}><MoreHorizontal size={21} /><span>More</span></button>
       </nav>
+
+      {mobileMenuOpen && (
+        <div className="mobile-sheet-layer" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeMobileMenu(); }}>
+          <section className="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title">
+            <div className="mobile-sheet-heading">
+              <div><p className="eyebrow">Navigation</p><h2 id="mobile-menu-title">Menu and account</h2></div>
+              <button ref={mobileCloseButtonRef} className="icon-button focus-ring" type="button" aria-label="Close menu" onClick={closeMobileMenu}><span aria-hidden="true">×</span></button>
+            </div>
+            <div className="mobile-context-card">
+              <span className="society-avatar" aria-hidden="true">{society.initials}</span>
+              <div><strong>{society.name}</strong><small>{config.label}</small></div>
+            </div>
+            <div className="mobile-sheet-section">
+              <p className="menu-label">Go to</p>
+              <nav className="mobile-all-nav" aria-label="All role navigation">
+                {config.navigation.map((item) => {
+                  const Icon = item.icon;
+                  return <Link key={item.label} href={item.href} className={`mobile-sheet-link focus-ring ${isCurrent(item.href) ? "active" : ""}`} onClick={() => setMobileMenuOpen(false)}><Icon size={20} /><span>{item.label}</span>{"count" in item && item.count && <span className="nav-count">{item.count}</span>}</Link>;
+                })}
+              </nav>
+            </div>
+            <div className="mobile-sheet-section">
+              <p className="menu-label">Switch society</p>
+              <div className="mobile-choice-list">
+                {societies.map((item) => <button key={item.name} className="mobile-choice focus-ring" onClick={() => setSociety(item)}><span className="menu-avatar">{item.initials}</span><span><strong>{item.name}</strong><small>{item.cameras} cameras</small></span>{society.name === item.name && <Check size={18} />}</button>)}
+              </div>
+            </div>
+            <div className="mobile-sheet-section">
+              <p className="menu-label">Preview role</p>
+              <div className="mobile-choice-list">
+                {(Object.keys(roleConfig) as Role[]).map((item) => <button key={item} className="mobile-choice focus-ring" onClick={() => changeRole(item)}><UserCog size={19} /><span><strong>{roleConfig[item].label}</strong><small>{item === "operator" ? "Review incidents" : item === "super_admin" ? "Manage platform" : "Manage society"}</small></span>{role === item && <Check size={18} />}</button>)}
+              </div>
+            </div>
+            <button className="mobile-signout focus-ring" type="button"><LogOut size={18} /> Sign out</button>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
