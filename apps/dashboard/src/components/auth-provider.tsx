@@ -95,8 +95,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured || loading) return;
-    const isAuthRoute = pathname.startsWith("/auth");
-    if (!user && !isAuthRoute) {
+    const isPublicRoute =
+      pathname.startsWith("/auth") || pathname.startsWith("/capture");
+    if (!user && !isPublicRoute) {
       router.replace(`/auth/sign-in?next=${encodeURIComponent(pathname)}`);
     }
   }, [loading, pathname, router, user]);

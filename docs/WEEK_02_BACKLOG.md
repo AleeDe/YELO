@@ -29,6 +29,8 @@ Week 2 begins after the existing repository and local environment are verified.
 - [x] Generate a one-time device token
 - [x] Store only the token hash
 - [x] Add camera status and heartbeat fields
+- [x] Add mobile and webcam capture client
+- [x] Add secure device pairing and heartbeat endpoint
 
 ## Static UI Prototype
 

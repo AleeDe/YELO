@@ -113,7 +113,7 @@ export default function RegisterCameraPage() {
           <div><p className="eyebrow">Camera registered</p><h1 id="token-title">Save the device token</h1><p>This token is shown only once. YELO stored only its SHA-256 hash.</p></div>
           <div className="device-token-box"><code>{deviceToken}</code><button className="secondary-button focus-ring" type="button" onClick={() => void copyToken()}>{copied ? <Check size={18} /> : <Clipboard size={18} />}{copied ? "Copied" : "Copy token"}</button></div>
           <div className="auth-notice warning"><AlertCircle size={20} /><div><strong>Do not lose this token</strong><p>You will enter it in the mobile or webcam capture client. A replacement token requires a secure rotation workflow.</p></div></div>
-          <div className="form-actions"><Link href="/cameras" className="secondary-button focus-ring">Camera list</Link><Link href={`/cameras/view?id=${cameraId}`} className="primary-button focus-ring">Open camera <Camera size={18} /></Link></div>
+          <div className="form-actions"><Link href={`/cameras/view?id=${cameraId}`} className="secondary-button focus-ring">Open camera</Link><Link href="/capture" className="primary-button focus-ring">Connect device <Camera size={18} /></Link></div>
         </section>
       </>
     );

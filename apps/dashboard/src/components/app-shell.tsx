@@ -204,7 +204,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
   }
 
-  if (pathname.startsWith("/auth")) return <>{children}</>;
+  if (pathname.startsWith("/auth") || pathname.startsWith("/capture")) {
+    return <>{children}</>;
+  }
   if (auth.configured && (auth.loading || !auth.user)) {
     return (
       <main className="auth-loading" role="status" aria-live="polite">

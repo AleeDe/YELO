@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, Camera, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { destinationForRole, useAuth } from "@/components/auth-provider";
@@ -104,6 +104,11 @@ export default function SignInPage() {
             <button className="auth-submit focus-ring" type="submit" disabled={!auth.configured || submitting}>{submitting ? "Signing in..." : "Sign in"}<ArrowRight size={19} /></button>
           </form>
           <p className="auth-help">Need access? Contact your society administrator.</p>
+          <Link className="auth-camera-mode focus-ring" href="/capture">
+            <Camera size={19} />
+            <span><strong>Use this device as a camera</strong><small>Pair with a one-time camera token</small></span>
+            <ArrowRight size={18} />
+          </Link>
         </div>
       </section>
     </main>
