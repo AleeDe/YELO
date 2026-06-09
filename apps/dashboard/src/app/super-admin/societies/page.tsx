@@ -157,7 +157,7 @@ export default function SocietiesPage() {
         email: invitation.email.trim(),
         fullName: invitation.fullName.trim(),
         role: "society_admin",
-        redirectTo: `${window.location.origin}/auth/update-password`,
+        redirectTo: `${window.location.origin}/auth/confirm-email`,
       },
     });
 

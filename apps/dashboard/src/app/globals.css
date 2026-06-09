@@ -2881,6 +2881,16 @@ h3 {
   color: var(--text-muted);
 }
 
+.auth-confirm-icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
 .auth-notice,
 .auth-error {
   display: flex;

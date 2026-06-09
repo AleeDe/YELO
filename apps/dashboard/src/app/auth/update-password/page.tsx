@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -24,7 +25,16 @@ export default function UpdatePasswordPage() {
     async function establishRecoverySession() {
       if (!auth.client) return;
 
-      const code = new URLSearchParams(window.location.search).get("code");
+      const searchParams = new URLSearchParams(window.location.search);
+      const callbackError = searchParams.get("error_description");
+      if (callbackError) {
+        setError(callbackError.replace(/\+/g, " "));
+        window.history.replaceState({}, "", window.location.pathname);
+        setVerifyingLink(false);
+        return;
+      }
+
+      const code = searchParams.get("code");
       if (code) {
         const { error: exchangeError } =
           await auth.client.auth.exchangeCodeForSession(code);
@@ -84,10 +94,15 @@ export default function UpdatePasswordPage() {
             <button className="auth-submit focus-ring" disabled={!auth.configured}>Update password</button>
           </form>
         ) : (
-          <div className="auth-error" role="alert">
-            <AlertCircle size={18} />
-            <span>{error}</span>
-          </div>
+          <>
+            <div className="auth-error" role="alert">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
+            <Link className="auth-submit focus-ring" href="/auth/forgot-password">
+              Request another secure link
+            </Link>
+          </>
         )}
       </section>
     </main>

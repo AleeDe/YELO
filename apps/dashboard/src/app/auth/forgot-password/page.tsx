@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
     if (!auth.client) return;
     setSubmitting(true);
     setError("");
-    const redirectTo = `${window.location.origin}/auth/update-password`;
+    const redirectTo = `${window.location.origin}/auth/confirm-email`;
     const { error: resetError } = await auth.client.auth.resetPasswordForEmail(
       email.trim(),
       { redirectTo },
@@ -47,4 +47,3 @@ export default function ForgotPasswordPage() {
     </main>
   );
 }
-
