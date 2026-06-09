@@ -1,106 +1,43 @@
+"use client";
+
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Camera,
-  CheckCircle2,
-  Clock3,
-  MapPin,
-  Plus,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
-import { cameras, incidents } from "@/lib/demo-data";
-import { MetricCard, PageHeader, StatusPill } from "@/components/ui";
+import { AlertTriangle, Camera, CheckCircle2, LoaderCircle, Plus, Wifi } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { MetricCard, PageHeader } from "@/components/ui";
 
 export default function OverviewPage() {
-  return (
-    <>
-      <PageHeader
-        eyebrow="Tuesday, 9 June"
-        title="Good morning, Ali"
-        description="Review possible incidents and keep every camera healthy."
-        action={
-          <Link className="primary-button focus-ring" href="/cameras/register">
-            <Plus size={20} aria-hidden="true" /> Register camera
-          </Link>
-        }
-      />
+  const auth = useAuth();
+  const [values, setValues] = useState({ review: 0, cameras: 0, online: 0, resolved: 0 });
+  const [loading, setLoading] = useState(true);
 
-      <section className="attention-banner" aria-labelledby="attention-title">
-        <div className="attention-icon" aria-hidden="true"><AlertTriangle size={24} /></div>
-        <div className="attention-copy">
-          <p className="eyebrow">Action needed</p>
-          <h2 id="attention-title">6 possible incidents need review</h2>
-          <p>AI suggestions are not final decisions. Check the evidence before confirming an incident.</p>
-        </div>
-        <Link className="attention-action focus-ring" href="/incidents/YL-2048">
-          Review newest <ArrowRight size={19} aria-hidden="true" />
-        </Link>
-      </section>
+  useEffect(() => {
+    if (!auth.client || !auth.user) return;
+    const timeout = window.setTimeout(async () => {
+      const client = auth.client!;
+      const [review, cameras, online, resolved] = await Promise.all([
+        client.from("detection_events").select("*", { count: "exact", head: true }).in("status", ["new", "under_review"]),
+        client.from("cameras").select("*", { count: "exact", head: true }),
+        client.from("cameras").select("*", { count: "exact", head: true }).eq("status", "online"),
+        client.from("detection_events").select("*", { count: "exact", head: true }).in("status", ["confirmed", "false_positive", "resolved"]),
+      ]);
+      setValues({ review: review.count ?? 0, cameras: cameras.count ?? 0, online: online.count ?? 0, resolved: resolved.count ?? 0 });
+      setLoading(false);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [auth.client, auth.user]);
 
-      <section aria-labelledby="summary-title">
-        <div className="section-heading">
-          <div><p className="eyebrow">Today at a glance</p><h2 id="summary-title">Monitoring summary</h2></div>
-          <p className="last-updated" role="status">Updated just now</p>
-        </div>
-        <div className="metric-grid">
-          <MetricCard label="Needs review" value="6" detail="2 added in the last hour" tone="warning" icon={AlertTriangle} />
-          <MetricCard label="Cameras online" value="11/12" detail="92% available" tone="success" icon={Wifi} />
-          <MetricCard label="Resolved today" value="18" detail="Median review: 1m 42s" tone="neutral" icon={CheckCircle2} />
-        </div>
-      </section>
-
-      <div className="dashboard-grid">
-        <section className="panel incidents-panel" aria-labelledby="incidents-title">
-          <div className="panel-heading">
-            <div><p className="eyebrow">Human review queue</p><h2 id="incidents-title">Recent incidents</h2></div>
-            <Link className="text-link focus-ring" href="/incidents">View all <ArrowRight size={17} aria-hidden="true" /></Link>
-          </div>
-          <div className="incident-list">
-            {incidents.slice(0, 3).map((incident, index) => (
-              <article className="incident-row" key={incident.id}>
-                <div className="evidence-placeholder" aria-hidden="true"><Camera size={22} /><span>{index === 0 ? "Newest" : "Evidence"}</span></div>
-                <div className="incident-main">
-                  <div className="incident-title-row"><h3>{incident.object}</h3><StatusPill status={incident.status} /></div>
-                  <p className="incident-camera">{incident.camera}</p>
-                  <div className="incident-meta">
-                    <span><MapPin size={15} aria-hidden="true" />{incident.location}</span>
-                    <span><Clock3 size={15} aria-hidden="true" />{incident.time}</span>
-                  </div>
-                </div>
-                <div className="incident-side">
-                  <span className="confidence"><small>AI confidence</small><strong>{incident.confidence}%</strong></span>
-                  <Link className="secondary-button focus-ring" href={`/incidents/${incident.id}`}>Review</Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel camera-panel" aria-labelledby="cameras-title">
-          <div className="panel-heading">
-            <div><p className="eyebrow">Live availability</p><h2 id="cameras-title">Camera health</h2></div>
-            <Link className="text-link focus-ring" href="/cameras">Manage</Link>
-          </div>
-          <div className="health-summary">
-            <div className="health-score"><span>92%</span></div>
-            <div><strong>11 of 12 online</strong><p>One camera needs attention.</p></div>
-          </div>
-          <ul className="camera-list">
-            {cameras.slice(0, 3).map((camera) => (
-              <li key={camera.id}>
-                <div className={`camera-state ${camera.status.toLowerCase()}`} aria-hidden="true">
-                  {camera.status === "Online" ? <Wifi size={18} /> : <WifiOff size={18} />}
-                </div>
-                <div className="camera-copy"><strong>{camera.name}</strong><span>{camera.location}</span></div>
-                <div className="camera-seen"><strong className={camera.status.toLowerCase()}>{camera.status}</strong><span>{camera.lastSeen}</span></div>
-              </li>
-            ))}
-          </ul>
-          <Link className="full-width-button focus-ring" href="/cameras">Open camera management</Link>
-        </section>
-      </div>
-    </>
-  );
+  return <>
+    <PageHeader eyebrow="Society workspace" title={`Welcome, ${auth.user?.user_metadata.full_name || auth.user?.email?.split("@")[0] || "user"}`} description="Monitor real camera and incident activity for societies you can access." action={<Link className="primary-button focus-ring" href="/cameras/register"><Plus size={20} /> Register camera</Link>} />
+    <div className="metric-grid">
+      <MetricCard label="Needs review" value={loading ? "—" : String(values.review)} detail="AI events awaiting a decision" tone="warning" icon={AlertTriangle} />
+      <MetricCard label="Cameras online" value={loading ? "—" : `${values.online}/${values.cameras}`} detail="Connected monitoring sources" tone="success" icon={Wifi} />
+      <MetricCard label="Completed reviews" value={loading ? "—" : String(values.resolved)} detail="All recorded outcomes" tone="neutral" icon={CheckCircle2} />
+    </div>
+    <section className="panel">
+      {loading ? <div className="directory-state"><LoaderCircle className="spin" size={24} /><p>Loading workspace...</p></div>
+      : values.cameras === 0 ? <div className="empty-state"><div className="empty-icon"><Camera size={26} /></div><h2>No monitoring data yet</h2><p>Register a camera first. Real incidents and analytics will appear after detection events are received.</p><Link href="/cameras/register" className="secondary-button focus-ring">Register camera</Link></div>
+      : <div className="admin-actions"><h2>Workspace data is ready</h2><Link href="/cameras" className="action-row focus-ring"><Camera size={19} /><span><strong>Open cameras</strong><small>View live database records</small></span></Link><Link href="/incidents" className="action-row focus-ring"><AlertTriangle size={19} /><span><strong>Review incidents</strong><small>Open the human review queue</small></span></Link></div>}
+    </section>
+  </>;
 }

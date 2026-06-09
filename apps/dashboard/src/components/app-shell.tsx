@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
   AlertTriangle,
@@ -31,7 +31,7 @@ const roleConfig = {
     home: "/",
     navigation: [
       { label: "Overview", icon: LayoutDashboard, href: "/" },
-      { label: "Incidents", icon: AlertTriangle, href: "/incidents", count: 6 },
+      { label: "Incidents", icon: AlertTriangle, href: "/incidents" },
       { label: "Cameras", icon: Video, href: "/cameras" },
       { label: "Analytics", icon: BarChart3, href: "/analytics" },
       { label: "Members", icon: Users, href: "/members" },
@@ -44,7 +44,7 @@ const roleConfig = {
     navigation: [
       { label: "Platform", icon: LayoutDashboard, href: "/super-admin" },
       { label: "Societies", icon: Building2, href: "/super-admin/societies" },
-      { label: "All incidents", icon: AlertTriangle, href: "/incidents", count: 14 },
+      { label: "All incidents", icon: AlertTriangle, href: "/incidents" },
       { label: "All cameras", icon: Video, href: "/cameras" },
       { label: "Users", icon: Users, href: "/members" },
       { label: "Platform settings", icon: Settings, href: "/settings" },
@@ -54,17 +54,24 @@ const roleConfig = {
     label: "Operator",
     home: "/operator",
     navigation: [
-      { label: "My queue", icon: ClipboardCheck, href: "/operator", count: 6 },
+      { label: "My queue", icon: ClipboardCheck, href: "/operator" },
       { label: "Incidents", icon: AlertTriangle, href: "/incidents" },
       { label: "Cameras", icon: Video, href: "/cameras" },
     ],
   },
 } as const;
 
-const societies = [
-  { name: "Green Residency", initials: "GR", cameras: 12 },
-  { name: "Lake View Society", initials: "LV", cameras: 8 },
-  { name: "Model Town Homes", initials: "MT", cameras: 5 },
+type SocietyOption = {
+  id: string;
+  name: string;
+  initials: string;
+  cameras: number;
+};
+
+const previewSocieties: SocietyOption[] = [
+  { id: "preview-green", name: "Green Residency", initials: "GR", cameras: 12 },
+  { id: "preview-lake", name: "Lake View Society", initials: "LV", cameras: 8 },
+  { id: "preview-model", name: "Model Town Homes", initials: "MT", cameras: 5 },
 ];
 
 function Brand({ home }: { home: string }) {
@@ -83,7 +90,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>(() =>
     pathname.startsWith("/super-admin") ? "super_admin" : pathname.startsWith("/operator") ? "operator" : "society_admin",
   );
-  const [society, setSociety] = useState(societies[0]);
+  const [societies, setSocieties] = useState<SocietyOption[]>(
+    auth.configured ? [] : previewSocieties,
+  );
+  const [selectedSocietyId, setSelectedSocietyId] = useState<string | null>(null);
   const [societyOpen, setSocietyOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -96,8 +106,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const userName =
     auth.user?.user_metadata.full_name ||
     auth.user?.email?.split("@")[0] ||
-    "Ali Hassan";
-  const userEmail = auth.user?.email ?? "ali@example.com";
+    "YELO user";
+  const userEmail = auth.user?.email ?? "";
+  const society = useMemo(
+    () =>
+      societies.find((item) => item.id === selectedSocietyId) ??
+      societies[0] ??
+      null,
+    [selectedSocietyId, societies],
+  );
   const userInitials = userName
     .split(" ")
     .map((part: string) => part[0])
@@ -108,6 +125,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     window.localStorage.setItem("yelo-demo-role", role);
   }, [role]);
+
+  useEffect(() => {
+    if (!auth.configured || !auth.client || !auth.user) return;
+
+    const timeout = window.setTimeout(async () => {
+      const { data } = await auth.client!
+        .from("societies")
+        .select("id, name, cameras(count)")
+        .order("name");
+
+      const options = (data ?? []).map((item) => ({
+        id: item.id,
+        name: item.name,
+        initials: item.name
+          .split(" ")
+          .map((word: string) => word[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase(),
+        cameras: (item.cameras as { count: number }[] | undefined)?.[0]?.count ?? 0,
+      }));
+      setSocieties(options);
+      setSelectedSocietyId((current) =>
+        options.some((item) => item.id === current)
+          ? current
+          : auth.societyId ?? options[0]?.id ?? null,
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [auth.client, auth.configured, auth.societyId, auth.user]);
 
   useEffect(() => {
     document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
@@ -181,8 +229,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-haspopup="menu"
             onClick={() => setSocietyOpen((open) => !open)}
           >
-            <span className="society-avatar" aria-hidden="true">{society.initials}</span>
-            <span className="society-copy"><strong>{society.name}</strong><small>{config.label}</small></span>
+            <span className="society-avatar" aria-hidden="true">{society?.initials ?? "--"}</span>
+            <span className="society-copy"><strong>{society?.name ?? "No society yet"}</strong><small>{config.label}</small></span>
             <ChevronDown className={societyOpen ? "rotate-icon" : ""} size={18} aria-hidden="true" />
           </button>
           {societyOpen && (
@@ -192,12 +240,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   key={item.name}
                   role="menuitemradio"
-                  aria-checked={society.name === item.name}
-                  onClick={() => { setSociety(item); setSocietyOpen(false); }}
+                  aria-checked={society?.id === item.id}
+                  onClick={() => { setSelectedSocietyId(item.id); setSocietyOpen(false); }}
                 >
                   <span className="menu-avatar">{item.initials}</span>
                   <span><strong>{item.name}</strong><small>{item.cameras} registered cameras</small></span>
-                  {society.name === item.name && <Check size={17} aria-hidden="true" />}
+                  {society?.id === item.id && <Check size={17} aria-hidden="true" />}
                 </button>
               ))}
               {effectiveRole === "super_admin" && <Link href="/super-admin/societies" className="popover-link" onClick={() => setSocietyOpen(false)}><Building2 size={17} /> Manage all societies</Link>}
@@ -206,7 +254,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="desktop-nav">
-          <span className="eyebrow nav-label">{role === "super_admin" ? "Platform" : "Workspace"}</span>
+          <span className="eyebrow nav-label">{effectiveRole === "super_admin" ? "Platform" : "Workspace"}</span>
           <ul>
             {config.navigation.map((item) => {
               const Icon = item.icon;
@@ -215,7 +263,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <li key={item.label}>
                   <Link href={item.href} className={`nav-link focus-ring ${current ? "active" : ""}`} aria-current={current ? "page" : undefined}>
                     <Icon size={20} strokeWidth={1.9} aria-hidden="true" /><span>{item.label}</span>
-                    {"count" in item && item.count && <span className="nav-count" aria-label={`${item.count} items`}>{item.count}</span>}
                   </Link>
                 </li>
               );
@@ -225,7 +272,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="sidebar-status">
           <div className="status-icon success" aria-hidden="true"><ShieldCheck size={20} /></div>
-          <div><strong>Detection service active</strong><p>{effectiveRole === "super_admin" ? "24 cameras across 3 societies" : "11 cameras are processing"}</p></div>
+          <div><strong>Detection service ready</strong><p>{societies.reduce((total, item) => total + item.cameras, 0)} registered cameras</p></div>
         </div>
 
         <div className="user-menu-wrap" ref={userRef}>
@@ -270,7 +317,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {config.navigation.slice(0, 3).map((item) => {
           const Icon = item.icon;
           const current = isCurrent(item.href);
-          return <Link key={item.label} href={item.href} className={`mobile-nav-link focus-ring ${current ? "active" : ""}`} aria-current={current ? "page" : undefined}><Icon size={21} /><span>{item.label}</span>{"count" in item && item.count && <span className="mobile-badge">{item.count}</span>}</Link>;
+          return <Link key={item.label} href={item.href} className={`mobile-nav-link focus-ring ${current ? "active" : ""}`} aria-current={current ? "page" : undefined}><Icon size={21} /><span>{item.label}</span></Link>;
         })}
         <button className={`mobile-nav-link focus-ring ${mobileMenuOpen ? "active" : ""}`} type="button" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}><MoreHorizontal size={21} /><span>More</span></button>
       </nav>
@@ -283,22 +330,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button ref={mobileCloseButtonRef} className="icon-button focus-ring" type="button" aria-label="Close menu" onClick={closeMobileMenu}><span aria-hidden="true">×</span></button>
             </div>
             <div className="mobile-context-card">
-              <span className="society-avatar" aria-hidden="true">{society.initials}</span>
-              <div><strong>{society.name}</strong><small>{config.label}</small></div>
+              <span className="society-avatar" aria-hidden="true">{society?.initials ?? "--"}</span>
+              <div><strong>{society?.name ?? "No society yet"}</strong><small>{config.label}</small></div>
             </div>
             <div className="mobile-sheet-section">
               <p className="menu-label">Go to</p>
               <nav className="mobile-all-nav" aria-label="All role navigation">
                 {config.navigation.map((item) => {
                   const Icon = item.icon;
-                  return <Link key={item.label} href={item.href} className={`mobile-sheet-link focus-ring ${isCurrent(item.href) ? "active" : ""}`} onClick={() => setMobileMenuOpen(false)}><Icon size={20} /><span>{item.label}</span>{"count" in item && item.count && <span className="nav-count">{item.count}</span>}</Link>;
+                  return <Link key={item.label} href={item.href} className={`mobile-sheet-link focus-ring ${isCurrent(item.href) ? "active" : ""}`} onClick={() => setMobileMenuOpen(false)}><Icon size={20} /><span>{item.label}</span></Link>;
                 })}
               </nav>
             </div>
             <div className="mobile-sheet-section">
               <p className="menu-label">Switch society</p>
               <div className="mobile-choice-list">
-                {societies.map((item) => <button key={item.name} className="mobile-choice focus-ring" onClick={() => setSociety(item)}><span className="menu-avatar">{item.initials}</span><span><strong>{item.name}</strong><small>{item.cameras} cameras</small></span>{society.name === item.name && <Check size={18} />}</button>)}
+                {societies.map((item) => <button key={item.id} className="mobile-choice focus-ring" onClick={() => setSelectedSocietyId(item.id)}><span className="menu-avatar">{item.initials}</span><span><strong>{item.name}</strong><small>{item.cameras} cameras</small></span>{society?.id === item.id && <Check size={18} />}</button>)}
               </div>
             </div>
             <div className="mobile-sheet-section">

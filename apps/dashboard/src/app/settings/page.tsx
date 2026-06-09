@@ -44,13 +44,13 @@ export default function SettingsPage() {
             <section className="panel settings-section">
               <div className="settings-heading"><p className="eyebrow">Organization</p><h2>Society profile</h2><p>This information appears in camera and incident context.</p></div>
               <div className="form-grid">
-                <label className="form-field"><span>Society name</span><input type="text" defaultValue="Green Residency" /></label>
-                <label className="form-field"><span>URL identifier</span><input type="text" defaultValue="green-residency" /></label>
-                <label className="form-field full-field"><span>Address</span><input type="text" defaultValue="Main Boulevard, Lahore" /></label>
+                <label className="form-field"><span>Society name</span><input type="text" placeholder="Select a society to edit" disabled /></label>
+                <label className="form-field"><span>URL identifier</span><input type="text" placeholder="Not loaded" disabled /></label>
+                <label className="form-field full-field"><span>Address</span><input type="text" placeholder="Not loaded" disabled /></label>
                 <label className="form-field"><span>Timezone</span><select defaultValue="Asia/Karachi"><option>Asia/Karachi</option><option>UTC</option></select></label>
-                <label className="form-field"><span>Primary contact</span><input type="email" defaultValue="admin@greenresidency.pk" /></label>
+                <label className="form-field"><span>Primary contact</span><input type="email" placeholder="Not configured" disabled /></label>
               </div>
-              <div className="settings-save"><p role="status">No unsaved changes</p><button className="primary-button focus-ring"><Save size={18} /> Save profile</button></div>
+              <div className="settings-save"><p role="status">Society settings are not connected yet</p><button className="primary-button focus-ring" disabled><Save size={18} /> Save profile</button></div>
             </section>
             <section className="panel settings-section danger-section"><div><p className="eyebrow">Danger zone</p><h2>Disable society workspace</h2><p>This pauses processing and member access while retaining existing evidence.</p></div><button className="danger-button focus-ring">Disable workspace</button></section>
           </>}

@@ -43,10 +43,9 @@ export default function RegisterCameraPage() {
             <label className="form-field"><span>Camera name</span><input type="text" placeholder="e.g. Park north entrance" /></label>
             <label className="form-field"><span>Location label</span><input type="text" placeholder="e.g. Block C community park" /></label>
           </div>
-          <div className="form-actions"><Link href="/cameras" className="secondary-button focus-ring">Cancel</Link><Link href="/cameras/CAM-001" className="primary-button focus-ring">Continue to connection <Camera size={18} /></Link></div>
+          <div className="form-actions"><Link href="/cameras" className="secondary-button focus-ring">Cancel</Link><button type="button" className="primary-button focus-ring" disabled title="Database registration is the next implementation step">Register details first <Camera size={18} /></button></div>
         </section>
       </div>
     </>
   );
 }
-
