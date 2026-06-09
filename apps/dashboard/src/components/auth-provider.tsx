@@ -100,7 +100,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured || loading || !user || !role) return;
-    if (pathname.startsWith("/super-admin") && role !== "super_admin") {
+    if (role === "super_admin" && pathname === "/settings") {
+      router.replace("/super-admin/settings");
+    } else if (pathname.startsWith("/super-admin") && role !== "super_admin") {
       router.replace(destinationForRole(role));
     } else if (pathname.startsWith("/operator") && role !== "operator") {
       router.replace(destinationForRole(role));

@@ -152,13 +152,14 @@ Top-level navigation:
 
 Top-level navigation:
 
-1. Overview
+1. Command center
 2. Societies
-3. Incidents
-4. Cameras
-5. Users
-6. Audit
-7. Settings
+3. Cameras
+4. Incidents
+5. Platform settings
+
+The Super Administrator remains in platform scope. Entering society context is
+an explicit drill-down action, not a persistent global switcher.
 
 ### Operator
 
@@ -265,6 +266,19 @@ Initial targets:
 | Reach any top-level page | 1 action |
 | See camera health | No interaction from Overview |
 | Acknowledge a normal alert | No forced modal |
+
+### Super Admin Task Comparison
+
+| Task | Previous flow | Redesigned flow |
+|---|---:|---:|
+| See platform risks | Navigate and inspect several pages | 0 actions |
+| Create a society | Open society switcher, manage, add | 1 action |
+| Review camera fleet | Open society context, then cameras | 1 action |
+| Reach platform policy | Account menu or shared settings | 1 action |
+| Reach personal security | Shared settings and interpret scope | 1 action |
+
+The redesign removes mental preparation around scope selection. Platform policy,
+society configuration, and personal account controls have separate destinations.
 
 ## Acceptance Checklist
 

@@ -42,12 +42,11 @@ const roleConfig = {
     label: "Super administrator",
     home: "/super-admin",
     navigation: [
-      { label: "Platform", icon: LayoutDashboard, href: "/super-admin" },
+      { label: "Command center", icon: LayoutDashboard, href: "/super-admin" },
       { label: "Societies", icon: Building2, href: "/super-admin/societies" },
-      { label: "All incidents", icon: AlertTriangle, href: "/incidents" },
-      { label: "All cameras", icon: Video, href: "/cameras" },
-      { label: "Users", icon: Users, href: "/members" },
-      { label: "Platform settings", icon: Settings, href: "/settings" },
+      { label: "Cameras", icon: Video, href: "/cameras" },
+      { label: "Incidents", icon: AlertTriangle, href: "/incidents" },
+      { label: "Platform settings", icon: Settings, href: "/super-admin/settings" },
     ],
   },
   operator: {
@@ -221,7 +220,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="sidebar" aria-label="Primary navigation">
         <Brand home={config.home} />
         <div className="society-switcher" ref={societyRef}>
-          <span className="eyebrow">{effectiveRole === "super_admin" ? "Society context" : "Current society"}</span>
+          <span className="eyebrow">{effectiveRole === "super_admin" ? "Administration scope" : "Current society"}</span>
+          {effectiveRole === "super_admin" ? (
+            <Link className="platform-scope-card focus-ring" href="/super-admin/societies">
+              <span className="platform-scope-icon" aria-hidden="true"><Building2 size={20} /></span>
+              <span><strong>Entire platform</strong><small>{societies.length} societies · {societies.reduce((total, item) => total + item.cameras, 0)} cameras</small></span>
+              <ChevronDown className="scope-arrow" size={18} aria-hidden="true" />
+            </Link>
+          ) : (
+          <>
           <button
             className="society-button focus-ring"
             type="button"
@@ -248,8 +255,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {society?.id === item.id && <Check size={17} aria-hidden="true" />}
                 </button>
               ))}
-              {effectiveRole === "super_admin" && <Link href="/super-admin/societies" className="popover-link" onClick={() => setSocietyOpen(false)}><Building2 size={17} /> Manage all societies</Link>}
             </div>
+          )}
+          </>
           )}
         </div>
 
@@ -295,7 +303,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
               </>}
               <div className="menu-separator" />
-              <Link href="/settings" className="popover-link" onClick={() => setUserOpen(false)}><Settings size={17} /> Account settings</Link>
+              <Link href="/account" className="popover-link" onClick={() => setUserOpen(false)}><Settings size={17} /> Account settings</Link>
               <button className="logout-item" role="menuitem" onClick={() => void auth.signOut()}><LogOut size={17} /> Sign out</button>
             </div>
           )}
@@ -306,7 +314,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="mobile-header">
           <Brand home={config.home} />
           <div className="mobile-header-actions">
-            <button className="icon-button focus-ring" type="button" aria-label="Notifications, 6 unread"><Bell size={21} /><span className="notification-dot" /></button>
+            <button className="icon-button focus-ring" type="button" aria-label="Notifications"><Bell size={21} /></button>
             <button ref={mobileMenuButtonRef} className="icon-button focus-ring" type="button" aria-label="Open navigation and account menu" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}><Menu size={22} /></button>
           </div>
         </header>
@@ -330,8 +338,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button ref={mobileCloseButtonRef} className="icon-button focus-ring" type="button" aria-label="Close menu" onClick={closeMobileMenu}><span aria-hidden="true">×</span></button>
             </div>
             <div className="mobile-context-card">
-              <span className="society-avatar" aria-hidden="true">{society?.initials ?? "--"}</span>
-              <div><strong>{society?.name ?? "No society yet"}</strong><small>{config.label}</small></div>
+              <span className="society-avatar" aria-hidden="true">{effectiveRole === "super_admin" ? <Building2 size={18} /> : society?.initials ?? "--"}</span>
+              <div><strong>{effectiveRole === "super_admin" ? "Entire platform" : society?.name ?? "No society yet"}</strong><small>{config.label}</small></div>
             </div>
             <div className="mobile-sheet-section">
               <p className="menu-label">Go to</p>
@@ -342,12 +350,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 })}
               </nav>
             </div>
-            <div className="mobile-sheet-section">
+            {effectiveRole !== "super_admin" && <div className="mobile-sheet-section">
               <p className="menu-label">Switch society</p>
               <div className="mobile-choice-list">
                 {societies.map((item) => <button key={item.id} className="mobile-choice focus-ring" onClick={() => setSelectedSocietyId(item.id)}><span className="menu-avatar">{item.initials}</span><span><strong>{item.name}</strong><small>{item.cameras} cameras</small></span>{society?.id === item.id && <Check size={18} />}</button>)}
               </div>
-            </div>
+            </div>}
             <div className="mobile-sheet-section">
               {!auth.configured && <>
                 <p className="menu-label">Preview role</p>

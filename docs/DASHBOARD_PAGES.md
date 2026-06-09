@@ -8,14 +8,18 @@
 
 ## Super Admin
 
-- Platform overview
+- Platform command center
 - Societies
 - Society details
-- Users
 - All cameras
 - All incidents
+- Platform access
 - Platform settings
 - Audit logs
+
+Super Admin navigation stays in platform scope. It does not inherit the current
+society switcher or society settings. Personal profile and password controls
+live in Account settings for every role.
 
 ## Society Admin
 
@@ -44,4 +48,3 @@
 - Camera preview
 - Connect/disconnect
 - Connection and processing status
-
