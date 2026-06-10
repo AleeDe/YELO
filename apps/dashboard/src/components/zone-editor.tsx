@@ -29,6 +29,7 @@ type ZoneEditorProps = {
   societyId: string;
   client: SupabaseClient;
   zones: RestrictedZone[];
+  latestFrameUrl?: string;
   onZonesChange: (zones: RestrictedZone[]) => void;
 };
 
@@ -41,6 +42,7 @@ export function ZoneEditor({
   societyId,
   client,
   zones,
+  latestFrameUrl = "",
   onZonesChange,
 }: ZoneEditorProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -57,16 +59,23 @@ export function ZoneEditor({
 
   useEffect(
     () => () => {
-      if (referenceImage) URL.revokeObjectURL(referenceImage);
+      if (referenceImage.startsWith("blob:")) URL.revokeObjectURL(referenceImage);
     },
     [referenceImage],
   );
+
+  useEffect(() => {
+    if (editing && !referenceImage && latestFrameUrl) {
+      setReferenceImage(latestFrameUrl);
+    }
+  }, [editing, latestFrameUrl, referenceImage]);
 
   function openNewZone() {
     setEditing(true);
     setEditingId(null);
     setName(`Restricted area ${zones.length + 1}`);
     setPoints([]);
+    setReferenceImage(latestFrameUrl);
     setError("");
   }
 
@@ -75,6 +84,7 @@ export function ZoneEditor({
     setEditingId(zone.id);
     setName(zone.name);
     setPoints(zone.polygon);
+    setReferenceImage(latestFrameUrl);
     setError("");
   }
 
@@ -92,7 +102,7 @@ export function ZoneEditor({
       setError("Choose a camera image in JPEG, PNG, or WebP format.");
       return;
     }
-    if (referenceImage) URL.revokeObjectURL(referenceImage);
+    if (referenceImage.startsWith("blob:")) URL.revokeObjectURL(referenceImage);
     setReferenceImage(URL.createObjectURL(file));
     setError("");
   }
@@ -262,7 +272,7 @@ export function ZoneEditor({
 
             <input
               ref={imageInputRef}
-              className="visually-hidden"
+              hidden
               type="file"
               accept="image/*"
               capture="environment"

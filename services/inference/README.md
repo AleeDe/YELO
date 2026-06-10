@@ -79,3 +79,12 @@ YELO_WASTE_CLASSES=bottle,cup,bowl,banana,apple,orange,backpack,handbag,suitcase
 The public pretrained model is useful for people and common COCO objects. It is
 not a complete littering model. Replace it with the Colab-trained `best.pt` that
 contains the project waste classes before evaluating littering accuracy.
+
+## Dashboard live preview
+
+The Capture client independently publishes one private JPEG every two seconds
+to the `camera-live-frame` Edge Function. The function overwrites a single
+object per camera in the private `camera-live-frames` bucket, so it provides a
+low-frame-rate dashboard preview without retaining continuous footage. The
+camera detail page refreshes that object and labels previews older than ten
+seconds as stale. Confirmed incident evidence remains stored separately.

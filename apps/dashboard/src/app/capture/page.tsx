@@ -88,6 +88,8 @@ export default function CapturePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sendingFrameRef = useRef(false);
+  const publishingFrameRef = useRef(false);
+  const lastPublishedFrameRef = useRef(0);
   const returnPathRef = useRef("/cameras");
   const [token, setToken] = useState("");
   const [camera, setCamera] = useState<CameraInfo | null>(null);
@@ -107,6 +109,7 @@ export default function CapturePage() {
   const [violationCount, setViolationCount] = useState(0);
   const [eventCandidates, setEventCandidates] = useState<EventCandidate[]>([]);
   const [confirmedEventCount, setConfirmedEventCount] = useState(0);
+  const [dashboardPreviewAt, setDashboardPreviewAt] = useState<Date | null>(null);
   const [modelName, setModelName] = useState("");
   const [processorMessage, setProcessorMessage] = useState(
     "Starts when the camera preview is running.",
@@ -198,6 +201,41 @@ export default function CapturePage() {
         canvas.toBlob(resolve, "image/jpeg", 0.72),
       );
       if (!frame) throw new Error("This device could not encode a camera frame.");
+      const capturedAt = new Date().toISOString();
+      const now = Date.now();
+      if (
+        supabaseUrl &&
+        supabaseAnonKey &&
+        !publishingFrameRef.current &&
+        now - lastPublishedFrameRef.current >= 2_000
+      ) {
+        publishingFrameRef.current = true;
+        lastPublishedFrameRef.current = now;
+        void fetch(`${supabaseUrl}/functions/v1/camera-live-frame`, {
+          method: "POST",
+          headers: {
+            apikey: supabaseAnonKey,
+            "Content-Type": "image/jpeg",
+            "X-YELO-Camera-Id": camera.id,
+            "X-YELO-Camera-Token": token,
+            "X-YELO-Captured-At": capturedAt,
+          },
+          body: frame,
+        })
+          .then(async (liveResponse) => {
+            if (!liveResponse.ok) {
+              const liveResult = await liveResponse.json().catch(() => null);
+              throw new Error(liveResult?.error ?? "Dashboard preview upload failed.");
+            }
+            setDashboardPreviewAt(new Date(capturedAt));
+          })
+          .catch((publishError) => {
+            console.warn("Dashboard preview unavailable:", publishError);
+          })
+          .finally(() => {
+            publishingFrameRef.current = false;
+          });
+      }
 
       const response = await fetch(`${processorUrl.replace(/\/$/, "")}/frames`, {
         method: "POST",
@@ -205,7 +243,7 @@ export default function CapturePage() {
           "Content-Type": "image/jpeg",
           "X-YELO-Camera-Id": camera.id,
           "X-YELO-Camera-Token": token,
-          "X-YELO-Captured-At": new Date().toISOString(),
+          "X-YELO-Captured-At": capturedAt,
         },
         body: frame,
       });
@@ -293,6 +331,7 @@ export default function CapturePage() {
       setViolationCount(0);
       setEventCandidates([]);
       setConfirmedEventCount(0);
+      setDashboardPreviewAt(null);
       setModelName("");
     } catch (pairError) {
       setCamera(null);
@@ -393,6 +432,7 @@ export default function CapturePage() {
       setViolationCount(0);
       setEventCandidates([]);
       setConfirmedEventCount(0);
+      setDashboardPreviewAt(null);
       setModelName("");
     }
   }
@@ -580,6 +620,7 @@ export default function CapturePage() {
                 <div><dt>Objects in zones</dt><dd className={violationCount > 0 ? "capture-warning-value" : ""}>{violationCount}</dd></div>
                 <div><dt>Confirming events</dt><dd>{eventCandidates.length}</dd></div>
                 <div><dt>Events reported</dt><dd>{confirmedEventCount}</dd></div>
+                <div><dt>Dashboard preview</dt><dd>{dashboardPreviewAt ? dashboardPreviewAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</dd></div>
                 <div><dt>YOLO inference</dt><dd>{inferenceLatency !== null ? `${inferenceLatency} ms` : "Waiting"}</dd></div>
               </dl>
               {eventCandidates.length > 0 && (
@@ -629,7 +670,7 @@ export default function CapturePage() {
                   <small>Use the laptop&apos;s LAN IP when this camera runs on a phone.</small>
                 </label>
               </details>
-              <p className="capture-heartbeat-note">Device status updates every 25 seconds. Sampled frames are sent locally once per second and are not stored by this client.</p>
+              <p className="capture-heartbeat-note">Detection frames are sent locally once per second. One private preview frame is overwritten every two seconds; only confirmed incident evidence is retained.</p>
               <button className="capture-disconnect-button focus-ring" type="button" onClick={() => void disconnect()}>
                 <Unplug size={18} /> Disconnect device
               </button>

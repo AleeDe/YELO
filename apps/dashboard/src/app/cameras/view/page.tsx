@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -34,6 +35,7 @@ type CameraDetail = {
   confidence_threshold: number;
   confirmation_seconds: number;
   last_seen_at: string | null;
+  latest_frame_at: string | null;
   restricted_zones: RestrictedZone[];
 };
 
@@ -126,7 +128,11 @@ export default function CameraDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [liveFrameUrl, setLiveFrameUrl] = useState("");
+  const [previewClock, setPreviewClock] = useState(() => Date.now());
   const canManage = auth.role === "super_admin" || auth.role === "society_admin";
+  const cameraId = camera?.id ?? null;
+  const cameraSocietyId = camera?.society_id ?? null;
 
   useEffect(() => {
     if (!auth.client || !auth.user) return;
@@ -138,7 +144,7 @@ export default function CameraDetailPage() {
       }
       const { data, error: loadError } = await auth.client!
         .from("cameras")
-        .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, polygon, is_active)")
+        .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, latest_frame_at, restricted_zones(id, name, polygon, is_active)")
         .eq("id", id)
         .maybeSingle();
       setCamera(data as CameraDetail | null);
@@ -147,6 +153,48 @@ export default function CameraDetailPage() {
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [auth.client, auth.user]);
+
+  useEffect(() => {
+    if (!auth.client || !cameraId || !cameraSocietyId) return;
+    let active = true;
+    let signedUrl = "";
+    let signedAt = 0;
+
+    async function refreshPreview() {
+      const { data } = await auth.client!
+        .from("cameras")
+        .select("status, last_seen_at, latest_frame_at")
+        .eq("id", cameraId)
+        .maybeSingle();
+      if (!active || !data) return;
+      setCamera((current) => current ? { ...current, ...data } : current);
+      setPreviewClock(Date.now());
+      if (!data.latest_frame_at) {
+        setLiveFrameUrl("");
+        return;
+      }
+      if (!signedUrl || Date.now() - signedAt > 240_000) {
+        const path = `live/${cameraSocietyId}/${cameraId}.jpg`;
+        const { data: signed } = await auth.client!.storage
+          .from("camera-live-frames")
+          .createSignedUrl(path, 300);
+        signedUrl = signed?.signedUrl ?? "";
+        signedAt = Date.now();
+      }
+      if (signedUrl) {
+        setLiveFrameUrl(
+          `${signedUrl}${signedUrl.includes("?") ? "&" : "?"}frame=${encodeURIComponent(data.latest_frame_at)}`,
+        );
+      }
+    }
+
+    void refreshPreview();
+    const interval = window.setInterval(() => void refreshPreview(), 2_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [auth.client, cameraId, cameraSocietyId]);
 
   function openEditDialog() {
     if (!camera) return;
@@ -171,7 +219,7 @@ export default function CameraDetailPage() {
         confirmation_seconds: form.confirmationSeconds,
       })
       .eq("id", camera.id)
-      .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, polygon, is_active)")
+      .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, latest_frame_at, restricted_zones(id, name, polygon, is_active)")
       .single();
     setSaving(false);
     if (updateError || !data) {
@@ -207,6 +255,10 @@ export default function CameraDetailPage() {
 
   const status = camera.status[0].toUpperCase() + camera.status.slice(1);
   const guidance = sourceGuidance[camera.source_type];
+  const frameAgeSeconds = camera.latest_frame_at
+    ? Math.max(0, Math.round((previewClock - new Date(camera.latest_frame_at).getTime()) / 1000))
+    : null;
+  const frameIsFresh = frameAgeSeconds !== null && frameAgeSeconds <= 10;
 
   return (
     <>
@@ -225,10 +277,30 @@ export default function CameraDetailPage() {
             <div><p className="eyebrow">Camera source</p><h2>{camera.status === "online" ? "Live camera" : "Camera is offline"}</h2></div>
             {(camera.source_type === "mobile" || camera.source_type === "webcam") && <Link className="primary-button focus-ring camera-connect-action" href={`/capture?returnTo=${encodeURIComponent(`/cameras/view?id=${camera.id}`)}`}>Connect camera <ExternalLink size={17} /></Link>}
           </div>
-          <div className="live-preview">
-            <span className="preview-empty-icon"><Camera size={34} /></span>
-            <strong>{camera.status === "online" ? "Waiting for video frames" : "No live video"}</strong>
-            <p>{camera.status === "online" ? "The device heartbeat is active. Dashboard frame streaming is the next milestone." : "Connect the registered device to bring this camera online."}</p>
+          <div className={`live-preview ${liveFrameUrl ? "has-live-frame" : ""}`}>
+            {liveFrameUrl ? (
+              <>
+                <Image
+                  unoptimized
+                  width={1280}
+                  height={720}
+                  src={liveFrameUrl}
+                  alt={`Latest sampled frame from ${camera.name}`}
+                />
+                <span className={`dashboard-live-badge ${frameIsFresh ? "fresh" : "stale"}`}>
+                  <i /> {frameIsFresh ? "Live sampled preview" : "Last available frame"}
+                </span>
+                <span className="dashboard-frame-time">
+                  {frameAgeSeconds !== null ? `${frameAgeSeconds}s ago` : "Waiting"}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="preview-empty-icon"><Camera size={34} /></span>
+                <strong>{camera.status === "online" ? "Waiting for first preview frame" : "No live preview"}</strong>
+                <p>{camera.status === "online" ? "Keep Capture open and confirm that Dashboard preview shows a recent time." : "Connect and start the camera to publish sampled preview frames."}</p>
+              </>
+            )}
           </div>
         </section>
         <aside className="panel camera-summary-card" aria-label="Camera status summary">
@@ -264,6 +336,7 @@ export default function CameraDetailPage() {
             societyId={camera.society_id}
             client={auth.client}
             zones={camera.restricted_zones}
+            latestFrameUrl={liveFrameUrl}
             onZonesChange={(restricted_zones) =>
               setCamera((current) => current ? { ...current, restricted_zones } : current)
             }
