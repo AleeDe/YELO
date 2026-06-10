@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:field": "node scripts/field-smoke.mjs",
     "cap:add:android": "cap add android",
     "cap:sync": "npm run build && cap sync"
   },

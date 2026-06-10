@@ -4513,6 +4513,231 @@ h3 {
   }
 }
 
+/* End-to-end field testing */
+.field-test-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.field-test-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.field-test-heading h2,
+.field-test-heading p {
+  margin: 0;
+}
+
+.field-test-heading > div:first-child > p:last-child {
+  margin-top: 6px;
+  color: var(--text-muted);
+}
+
+.field-test-score {
+  display: grid;
+  min-width: 96px;
+  min-height: 76px;
+  place-content: center;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-muted);
+  text-align: center;
+}
+
+.field-test-score strong {
+  font-size: 24px;
+}
+
+.field-test-score span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.field-test-score.complete {
+  border-color: #abd9c4;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.field-test-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.field-test-actions small {
+  color: var(--text-muted);
+}
+
+.field-test-results,
+.field-test-manual {
+  display: grid;
+  gap: 12px;
+}
+
+.field-test-results h3,
+.field-test-manual h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.field-test-results > div,
+.field-test-manual > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field-test-results article {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.field-test-results article > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.field-test-results article.passed > span {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.field-test-results article.failed > span {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.field-test-results article strong,
+.field-test-results article p {
+  margin: 0;
+}
+
+.field-test-results article p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.field-test-manual > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-test-manual > div:first-child span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field-test-step {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 76px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.field-test-step:hover {
+  border-color: #9fc8b8;
+  background: var(--surface-muted);
+}
+
+.field-test-step > span:first-child {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.field-test-step > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.field-test-step small {
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.field-test-step.checked {
+  border-color: #abd9c4;
+  background: #fbfffd;
+}
+
+.field-test-step.checked > span:first-child {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.field-test-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.field-test-note p {
+  margin: 0;
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .field-test-results > div,
+  .field-test-manual > div:last-child {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .field-test-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-test-score {
+    min-height: 64px;
+  }
+
+  .field-test-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-test-actions .primary-button {
+    width: 100%;
+  }
+}
+
 /* Event confirmation, evidence, and realtime notifications */
 .capture-event-candidates {
   display: grid;

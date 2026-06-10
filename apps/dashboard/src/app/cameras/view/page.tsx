@@ -27,6 +27,7 @@ import {
   WebRtcState,
   WebRtcViewer,
 } from "@/components/live-webrtc";
+import { FieldTestPanel } from "@/components/field-test-panel";
 
 type CameraDetail = {
   id: string;
@@ -362,6 +363,18 @@ export default function CameraDetailPage() {
           <div className="connection-note"><AlertCircle size={19} /><p>{guidance.note}</p></div>
         </div>
       </details>
+
+      {auth.client && (
+        <FieldTestPanel
+          client={auth.client}
+          cameraId={camera.id}
+          cameraStatus={camera.status}
+          lastSeenAt={camera.last_seen_at}
+          latestFrameAt={camera.latest_frame_at}
+          zoneCount={camera.restricted_zones.filter((zone) => zone.is_active).length}
+          webRtcState={webRtcState}
+        />
+      )}
 
       <section className="panel zones-section">
         {canManage && auth.client ? (
