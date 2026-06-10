@@ -64,12 +64,6 @@ export function ZoneEditor({
     [referenceImage],
   );
 
-  useEffect(() => {
-    if (editing && !referenceImage && latestFrameUrl) {
-      setReferenceImage(latestFrameUrl);
-    }
-  }, [editing, latestFrameUrl, referenceImage]);
-
   function openNewZone() {
     setEditing(true);
     setEditingId(null);

@@ -7,6 +7,7 @@ import {
   Camera,
   CameraOff,
   CheckCircle2,
+  ExternalLink,
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
@@ -132,6 +133,16 @@ export default function CapturePage() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
+
+  useEffect(() => {
+    if (!streaming) return;
+    function warnBeforeLeaving(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [streaming]);
 
   const callDevice = useCallback(async (action: DeviceAction, deviceToken: string) => {
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -437,6 +448,17 @@ export default function CapturePage() {
     }
   }
 
+  function openDashboard() {
+    const dashboard = window.open(
+      returnPathRef.current,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    if (!dashboard) {
+      setError("Your browser blocked the dashboard tab. Allow pop-ups for YELO, then try again.");
+    }
+  }
+
   function leaveCapture() {
     stopTracks();
     if (camera && token) void callDevice("disconnect", token).catch(() => undefined);
@@ -464,10 +486,20 @@ export default function CapturePage() {
       </header>
 
       <nav className="capture-context-nav" aria-label="Capture navigation">
-        <button className="capture-back-link focus-ring" type="button" onClick={leaveCapture}>
-          <ArrowLeft size={18} />
-          <span>Back to cameras</span>
-        </button>
+        {streaming ? (
+          <>
+            <button className="capture-back-link primary focus-ring" type="button" onClick={openDashboard}>
+              <ExternalLink size={18} />
+              <span>Open dashboard</span>
+            </button>
+            <span className="capture-navigation-note">Capture stays open in this tab</span>
+          </>
+        ) : (
+          <button className="capture-back-link focus-ring" type="button" onClick={leaveCapture}>
+            <ArrowLeft size={18} />
+            <span>Back to cameras</span>
+          </button>
+        )}
       </nav>
 
       <div className={`capture-layout ${camera ? "paired" : "unpaired"}`}>
@@ -557,6 +589,9 @@ export default function CapturePage() {
                   </button>
                   <button className="capture-stop-button focus-ring" type="button" onClick={() => void stopPreview()}>
                     <CameraOff size={19} /> Stop preview
+                  </button>
+                  <button className="quiet-button focus-ring" type="button" onClick={leaveCapture}>
+                    Stop and leave
                   </button>
                 </>
               )}

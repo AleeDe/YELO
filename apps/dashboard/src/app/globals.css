@@ -5635,6 +5635,23 @@ h3 {
   color: var(--primary-dark);
 }
 
+.capture-back-link.primary {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.capture-back-link.primary:hover {
+  background: var(--primary-dark);
+  color: #fff;
+}
+
+.capture-navigation-note {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .capture-layout {
   display: grid;
   max-width: 1440px;
