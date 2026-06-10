@@ -66,6 +66,13 @@ type SocietyOption = {
   initials: string;
   cameras: number;
 };
+type NotificationRow = {
+  id: string;
+  event_id: string | null;
+  title: string;
+  is_read: boolean;
+  created_at: string;
+};
 
 const previewSocieties: SocietyOption[] = [
   { id: "preview-green", name: "Green Residency", initials: "GR", cameras: 12 },
@@ -96,8 +103,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [societyOpen, setSocietyOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const societyRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const effectiveRole = auth.role ?? role;
@@ -157,6 +167,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [auth.client, auth.configured, auth.societyId, auth.user]);
 
   useEffect(() => {
+    if (!auth.client || !auth.user) return;
+    let active = true;
+    void auth.client
+      .from("notifications")
+      .select("id, event_id, title, is_read, created_at")
+      .order("created_at", { ascending: false })
+      .limit(12)
+      .then(({ data }) => {
+        if (active) setNotifications((data ?? []) as NotificationRow[]);
+      });
+
+    const channel = auth.client
+      .channel(`notifications-${auth.user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${auth.user.id}`,
+        },
+        (payload) => {
+          const notification = payload.new as NotificationRow;
+          setNotifications((current) => [
+            notification,
+            ...current.filter((item) => item.id !== notification.id),
+          ].slice(0, 12));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      void auth.client?.removeChannel(channel);
+    };
+  }, [auth.client, auth.user]);
+
+  useEffect(() => {
     document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
     if (mobileMenuOpen) {
       window.requestAnimationFrame(() => mobileCloseButtonRef.current?.focus());
@@ -171,12 +219,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const target = event.target as Node;
       if (!societyRef.current?.contains(target)) setSocietyOpen(false);
       if (!userRef.current?.contains(target)) setUserOpen(false);
+      if (!(target instanceof Element) || !target.closest(".notification-center")) {
+        setNotificationOpen(false);
+      }
     }
     function closeWithEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setSocietyOpen(false);
         setUserOpen(false);
         setMobileMenuOpen(false);
+        setNotificationOpen(false);
         window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
       }
     }
@@ -203,6 +255,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
     window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
   }
+
+  async function openNotification(notification: NotificationRow) {
+    if (auth.client && !notification.is_read) {
+      await auth.client
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("id", notification.id);
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notification.id ? { ...item, is_read: true } : item,
+        ),
+      );
+    }
+    setNotificationOpen(false);
+    if (notification.event_id) router.push(`/incidents/view?id=${notification.event_id}`);
+  }
+
+  const unreadNotifications = notifications.filter((item) => !item.is_read).length;
+  const notificationCenter = (
+    <div className="notification-center" ref={notificationRef}>
+      <button
+        className="icon-button notification-button focus-ring"
+        type="button"
+        aria-label={`Notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ""}`}
+        aria-expanded={notificationOpen}
+        onClick={() => setNotificationOpen((open) => !open)}
+      >
+        <Bell size={21} />
+        {unreadNotifications > 0 && <span>{Math.min(unreadNotifications, 9)}</span>}
+      </button>
+      {notificationOpen && (
+        <div className="popover-menu notification-popover" role="menu" aria-label="Recent notifications">
+          <div className="popover-heading">
+            <strong>Notifications</strong>
+            <small>{unreadNotifications ? `${unreadNotifications} need attention` : "You are up to date"}</small>
+          </div>
+          {notifications.length === 0 ? (
+            <p className="notification-empty">New incident alerts will appear here.</p>
+          ) : notifications.map((notification) => (
+            <button
+              key={notification.id}
+              className={`notification-item ${notification.is_read ? "" : "unread"}`}
+              role="menuitem"
+              onClick={() => void openNotification(notification)}
+            >
+              <span aria-hidden="true" />
+              <span>
+                <strong>{notification.title}</strong>
+                <small>{new Date(notification.created_at).toLocaleString()}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   if (pathname.startsWith("/auth") || pathname.startsWith("/capture")) {
     return <>{children}</>;
@@ -284,6 +392,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="status-icon success" aria-hidden="true"><ShieldCheck size={20} /></div>
           <div><strong>Detection service ready</strong><p>{societies.reduce((total, item) => total + item.cameras, 0)} registered cameras</p></div>
         </div>
+        <div className="sidebar-notifications">{notificationCenter}</div>
 
         <div className="user-menu-wrap" ref={userRef}>
           <button className="user-menu focus-ring" type="button" aria-expanded={userOpen} aria-haspopup="menu" onClick={() => setUserOpen((open) => !open)}>
@@ -316,7 +425,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="mobile-header">
           <Brand home={config.home} />
           <div className="mobile-header-actions">
-            <button className="icon-button focus-ring" type="button" aria-label="Notifications"><Bell size={21} /></button>
+            {notificationCenter}
             <button ref={mobileMenuButtonRef} className="icon-button focus-ring" type="button" aria-label="Open navigation and account menu" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}><Menu size={22} /></button>
           </div>
         </header>

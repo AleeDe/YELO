@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import base64
 import json
 import math
 import os
@@ -28,6 +29,23 @@ MODEL_IMAGE_SIZE = int(os.getenv("YELO_MODEL_IMAGE_SIZE", "640"))
 TRACKER_CONFIG = os.getenv("YELO_TRACKER_CONFIG", "bytetrack.yaml")
 TRACKER_STALE_SECONDS = int(os.getenv("YELO_TRACKER_STALE_SECONDS", "120"))
 TRACK_HISTORY_LENGTH = int(os.getenv("YELO_TRACK_HISTORY_LENGTH", "20"))
+EVENT_REPORT_URL = os.getenv(
+    "YELO_EVENT_REPORT_URL",
+    f"{SUPABASE_URL}/functions/v1/report-camera-event" if SUPABASE_URL else "",
+)
+EVENT_STATIONARY_DISTANCE = float(
+    os.getenv("YELO_EVENT_STATIONARY_DISTANCE", "0.015")
+)
+EVENT_PERSON_DISTANCE = float(os.getenv("YELO_EVENT_PERSON_DISTANCE", "0.3"))
+EVENT_COOLDOWN_SECONDS = int(os.getenv("YELO_EVENT_COOLDOWN_SECONDS", "120"))
+WASTE_CLASSES = {
+    value.strip().lower()
+    for value in os.getenv(
+        "YELO_WASTE_CLASSES",
+        "bottle,cup,bowl,banana,apple,orange,backpack,handbag,suitcase",
+    ).split(",")
+    if value.strip()
+}
 configured_classes = {
     value.strip().lower()
     for value in os.getenv("YELO_DETECTION_CLASSES", "").split(",")
@@ -42,6 +60,8 @@ model_error: str | None = None
 camera_models: dict[str, Any] = {}
 camera_model_seen: dict[str, float] = {}
 track_history: dict[str, dict[int, list[tuple[float, float]]]] = {}
+event_candidates: dict[str, dict[str, dict[str, Any]]] = {}
+event_cooldowns: dict[str, float] = {}
 
 
 def normalized_polygon(value: Any) -> list[tuple[float, float]]:
@@ -122,6 +142,7 @@ def cleanup_stale_trackers(now: float) -> None:
         camera_models.pop(camera_id, None)
         camera_model_seen.pop(camera_id, None)
         track_history.pop(camera_id, None)
+        event_candidates.pop(camera_id, None)
 
 
 def camera_model(camera_id: str) -> Any:
@@ -140,6 +161,206 @@ def camera_model(camera_id: str) -> Any:
 
 def json_bytes(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def normalized_distance(
+    first: tuple[float, float],
+    second: tuple[float, float],
+) -> float:
+    return math.hypot(first[0] - second[0], first[1] - second[1])
+
+
+def nearest_person(
+    point: tuple[float, float],
+    detections: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, float | None]:
+    people = [
+        detection
+        for detection in detections
+        if detection["label"].lower() == "person"
+        and detection["trackId"] is not None
+    ]
+    if not people:
+        return None, None
+    person = min(
+        people,
+        key=lambda detection: normalized_distance(
+            point,
+            (
+                float(detection["groundPoint"]["x"]),
+                float(detection["groundPoint"]["y"]),
+            ),
+        ),
+    )
+    return person, normalized_distance(
+        point,
+        (
+            float(person["groundPoint"]["x"]),
+            float(person["groundPoint"]["y"]),
+        ),
+    )
+
+
+def report_confirmed_event(
+    camera: dict[str, Any],
+    token: str,
+    frame: bytes,
+    event: dict[str, Any],
+) -> None:
+    if not EVENT_REPORT_URL or not SUPABASE_ANON_KEY:
+        print("Event confirmed locally, but event reporting is not configured.")
+        return
+    payload = {
+        "token": token,
+        "cameraId": str(camera["id"]),
+        "zoneId": event["zoneId"],
+        "objectClass": event["objectClass"],
+        "confidence": event["confidence"],
+        "capturedAt": event["capturedAt"],
+        "eventKey": event["eventKey"],
+        "metadata": event["metadata"],
+        "evidenceBase64": base64.b64encode(frame).decode("ascii"),
+    }
+    request = urllib.request.Request(
+        EVENT_REPORT_URL,
+        data=json_bytes(payload),
+        headers={
+            "apikey": SUPABASE_ANON_KEY,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            result = json.loads(response.read().decode("utf-8"))
+            print(f"Reported incident {result.get('eventId', 'unknown')}.")
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as error:
+        print(f"Incident reporting failed: {error}")
+
+
+def start_event_report(
+    camera: dict[str, Any],
+    token: str,
+    frame: bytes,
+    event: dict[str, Any],
+) -> None:
+    threading.Thread(
+        target=report_confirmed_event,
+        args=(camera, token, frame, event),
+        daemon=True,
+    ).start()
+
+
+def evaluate_littering_events(
+    camera: dict[str, Any],
+    detections: list[dict[str, Any]],
+    captured_at: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    camera_id = str(camera["id"])
+    now = time.monotonic()
+    confirmation_seconds = max(1, int(camera.get("confirmation_seconds", 5)))
+    candidates = event_candidates.setdefault(camera_id, {})
+    candidate_statuses: list[dict[str, Any]] = []
+    confirmed: list[dict[str, Any]] = []
+    active_keys: set[str] = set()
+
+    for detection in detections:
+        track_id = detection["trackId"]
+        if (
+            track_id is None
+            or detection["label"].lower() not in WASTE_CLASSES
+            or not detection["inRestrictedZone"]
+        ):
+            continue
+        ground_point = (
+            float(detection["groundPoint"]["x"]),
+            float(detection["groundPoint"]["y"]),
+        )
+        for zone in detection["zones"]:
+            key = f"{zone['id']}:{track_id}"
+            active_keys.add(key)
+            candidate = candidates.get(key)
+            if candidate is None:
+                person, person_distance = nearest_person(ground_point, detections)
+                if (
+                    person is None
+                    or person_distance is None
+                    or person_distance > EVENT_PERSON_DISTANCE
+                ):
+                    continue
+                candidate = {
+                    "startedAt": now,
+                    "lastPoint": ground_point,
+                    "personTrackId": person["trackId"],
+                    "personDistance": person_distance,
+                    "maxConfidence": float(detection["confidence"]),
+                    "stationary": True,
+                }
+                candidates[key] = candidate
+            movement = normalized_distance(candidate["lastPoint"], ground_point)
+            candidate["lastPoint"] = ground_point
+            candidate["maxConfidence"] = max(
+                float(candidate["maxConfidence"]),
+                float(detection["confidence"]),
+            )
+            if movement > EVENT_STATIONARY_DISTANCE:
+                candidate["startedAt"] = now
+                candidate["stationary"] = False
+            else:
+                candidate["stationary"] = True
+            elapsed = max(0.0, now - float(candidate["startedAt"]))
+            progress = min(1.0, elapsed / confirmation_seconds)
+            candidate_statuses.append(
+                {
+                    "trackId": track_id,
+                    "label": detection["label"],
+                    "zoneId": zone["id"],
+                    "zoneName": zone["name"],
+                    "personTrackId": candidate["personTrackId"],
+                    "stationary": candidate["stationary"],
+                    "elapsedSeconds": round(elapsed, 1),
+                    "requiredSeconds": confirmation_seconds,
+                    "progress": round(progress, 3),
+                }
+            )
+            cooldown_key = (
+                f"{camera_id}:{zone['id']}:{detection['label'].lower()}:{track_id}"
+            )
+            if (
+                candidate["stationary"]
+                and elapsed >= confirmation_seconds
+                and now >= event_cooldowns.get(cooldown_key, 0)
+            ):
+                event_cooldowns[cooldown_key] = now + EVENT_COOLDOWN_SECONDS
+                event_key = hashlib.sha256(
+                    f"{camera_id}:{zone['id']}:{track_id}:{captured_at}".encode("utf-8")
+                ).hexdigest()
+                confirmed.append(
+                    {
+                        "eventKey": event_key,
+                        "zoneId": zone["id"],
+                        "zoneName": zone["name"],
+                        "objectClass": detection["label"],
+                        "confidence": round(float(candidate["maxConfidence"]), 4),
+                        "capturedAt": captured_at,
+                        "metadata": {
+                            "waste_track_id": track_id,
+                            "person_track_id": candidate["personTrackId"],
+                            "person_distance": round(
+                                float(candidate["personDistance"]),
+                                5,
+                            ),
+                            "confirmation_seconds": confirmation_seconds,
+                            "stationary_threshold": EVENT_STATIONARY_DISTANCE,
+                            "association_rule": "nearby_person_then_stationary_waste",
+                        },
+                    }
+                )
+                candidates.pop(key, None)
+
+    for stale_key in set(candidates) - active_keys:
+        candidates.pop(stale_key, None)
+    return candidate_statuses, confirmed
 
 
 def jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
@@ -207,7 +428,12 @@ def validate_camera(token: str, expected_camera_id: str) -> dict[str, Any]:
     return camera
 
 
-def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
+def process_frame(
+    camera: dict[str, Any],
+    token: str,
+    frame: bytes,
+    captured_at: str,
+) -> dict[str, Any]:
     """Run YOLO on one in-memory JPEG and return normalized detections."""
     dimensions = jpeg_dimensions(frame)
     if not dimensions:
@@ -339,6 +565,13 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
             "bytes": len(frame),
         }
     )
+    candidates, confirmed_events = evaluate_littering_events(
+        camera,
+        detections,
+        captured_at,
+    )
+    for event in confirmed_events:
+        start_event_report(camera, token, frame, event)
     return {
         "accepted": True,
         "cameraId": camera_id,
@@ -361,6 +594,9 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
         ],
         "violations": violations,
         "violationCount": len(violations),
+        "eventCandidates": candidates,
+        "confirmedEvents": confirmed_events,
+        "eventCandidateCount": len(candidates),
         "inferenceMs": inference_ms,
         "modelReady": model is not None,
         "modelName": MODEL_PATH if model is not None else None,
@@ -407,6 +643,10 @@ class Handler(BaseHTTPRequestHandler):
                     "activeTrackers": len(camera_models),
                     "confidence": MODEL_CONFIDENCE,
                     "classFilter": sorted(configured_classes),
+                    "wasteClasses": sorted(WASTE_CLASSES),
+                    "eventReportingReady": bool(
+                        EVENT_REPORT_URL and SUPABASE_ANON_KEY
+                    ),
                     "activeCameras": len(frame_stats),
                 },
             )
@@ -423,6 +663,7 @@ class Handler(BaseHTTPRequestHandler):
 
         camera_id = self.headers.get("X-YELO-Camera-Id", "").strip()
         token = self.headers.get("X-YELO-Camera-Token", "").strip()
+        captured_at = self.headers.get("X-YELO-Captured-At", "").strip()
         if not camera_id or not token:
             self.send_json(401, {"error": "Camera ID and token are required."})
             return
@@ -439,7 +680,12 @@ class Handler(BaseHTTPRequestHandler):
         frame = self.rfile.read(content_length)
         try:
             camera = validate_camera(token, camera_id)
-            result = process_frame(camera, frame)
+            result = process_frame(
+                camera,
+                token,
+                frame,
+                captured_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            )
         except PermissionError as error:
             self.send_json(401, {"error": str(error)})
             return

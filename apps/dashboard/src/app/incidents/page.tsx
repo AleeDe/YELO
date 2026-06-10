@@ -45,6 +45,36 @@ export default function IncidentsPage() {
     return () => window.clearTimeout(timeout);
   }, [auth.client, auth.user]);
 
+  useEffect(() => {
+    if (!auth.client || !auth.user) return;
+    const channel = auth.client
+      .channel(`incident-list-${auth.user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "detection_events" },
+        (payload) => {
+          const event = payload.new as Pick<EventRow, "id">;
+          void auth.client!
+            .from("detection_events")
+            .select("id, object_class, confidence, status, detected_at, cameras(name, location_label), restricted_zones(name)")
+            .eq("id", event.id)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (data) {
+                setEvents((current) => [
+                  data as EventRow,
+                  ...current.filter((item) => item.id !== data.id),
+                ]);
+              }
+            });
+        },
+      )
+      .subscribe();
+    return () => {
+      void auth.client?.removeChannel(channel);
+    };
+  }, [auth.client, auth.user]);
+
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
     return value

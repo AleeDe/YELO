@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft, Camera, Check, Clock3, LoaderCircle, MapPin, RotateCcw, ShieldAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
@@ -14,6 +15,7 @@ type IncidentDetail = {
   detected_at: string;
   cameras: { name: string; location_label: string }[];
   restricted_zones: { name: string }[];
+  event_media: { storage_path: string; captured_at: string }[];
 };
 
 const labels: Record<string, string> = { new: "Needs review", under_review: "Under review", confirmed: "Confirmed", false_positive: "False alert", resolved: "Resolved" };
@@ -23,6 +25,7 @@ export default function IncidentDetailPage() {
   const [incident, setIncident] = useState<IncidentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [evidenceUrl, setEvidenceUrl] = useState("");
 
   useEffect(() => {
     if (!auth.client || !auth.user) return;
@@ -34,10 +37,18 @@ export default function IncidentDetailPage() {
       }
       const { data } = await auth.client!
         .from("detection_events")
-        .select("id, object_class, confidence, status, detected_at, cameras(name, location_label), restricted_zones(name)")
+        .select("id, object_class, confidence, status, detected_at, cameras(name, location_label), restricted_zones(name), event_media(storage_path, captured_at)")
         .eq("id", id)
         .maybeSingle();
-      setIncident(data as IncidentDetail | null);
+      const loaded = data as IncidentDetail | null;
+      setIncident(loaded);
+      const media = loaded?.event_media?.[0];
+      if (media) {
+        const { data: signed } = await auth.client!.storage
+          .from("event-evidence")
+          .createSignedUrl(media.storage_path, 300);
+        setEvidenceUrl(signed?.signedUrl ?? "");
+      }
       setLoading(false);
     }, 0);
     return () => window.clearTimeout(timeout);
@@ -65,7 +76,19 @@ export default function IncidentDetailPage() {
       <div className="review-layout">
         <section className="panel evidence-panel">
           <div className="panel-heading"><div><p className="eyebrow">Captured evidence</p><h2>Detection frame</h2></div><span className="evidence-time"><Clock3 size={16} /> {new Date(incident.detected_at).toLocaleString()}</span></div>
-          <div className="large-evidence"><Camera size={42} /><p>No evidence media has been uploaded for this event.</p></div>
+          {evidenceUrl ? (
+            <div className="large-evidence has-image">
+              <Image
+                unoptimized
+                width={1280}
+                height={720}
+                src={evidenceUrl}
+                alt={`Evidence captured for ${incident.object_class}`}
+              />
+            </div>
+          ) : (
+            <div className="large-evidence"><Camera size={42} /><p>No evidence media has been uploaded for this event.</p></div>
+          )}
         </section>
         <aside className="review-sidebar">
           <section className="panel detail-card"><h2>Event details</h2><dl className="detail-list">

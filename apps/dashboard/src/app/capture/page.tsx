@@ -53,6 +53,17 @@ type RestrictedZone = {
   name: string;
   polygon: { x: number; y: number }[];
 };
+type EventCandidate = {
+  trackId: number;
+  label: string;
+  zoneId: string;
+  zoneName: string;
+  personTrackId: number;
+  stationary: boolean;
+  elapsedSeconds: number;
+  requiredSeconds: number;
+  progress: number;
+};
 
 const tokenStorageKey = "yelo-camera-device-token";
 const processorUrlStorageKey = "yelo-inference-url";
@@ -94,6 +105,8 @@ export default function CapturePage() {
   const [detections, setDetections] = useState<Detection[]>([]);
   const [restrictedZones, setRestrictedZones] = useState<RestrictedZone[]>([]);
   const [violationCount, setViolationCount] = useState(0);
+  const [eventCandidates, setEventCandidates] = useState<EventCandidate[]>([]);
+  const [confirmedEventCount, setConfirmedEventCount] = useState(0);
   const [modelName, setModelName] = useState("");
   const [processorMessage, setProcessorMessage] = useState(
     "Starts when the camera preview is running.",
@@ -214,6 +227,12 @@ export default function CapturePage() {
         Array.isArray(result?.restrictedZones) ? result.restrictedZones : [],
       );
       setViolationCount(Number(result?.violationCount) || 0);
+      setEventCandidates(
+        Array.isArray(result?.eventCandidates) ? result.eventCandidates : [],
+      );
+      if (Array.isArray(result?.confirmedEvents) && result.confirmedEvents.length > 0) {
+        setConfirmedEventCount((current) => current + result.confirmedEvents.length);
+      }
       setInferenceLatency(
         Number.isFinite(Number(result?.inferenceMs))
           ? Math.round(Number(result.inferenceMs))
@@ -229,6 +248,7 @@ export default function CapturePage() {
       setProcessorState("error");
       setDetections([]);
       setViolationCount(0);
+      setEventCandidates([]);
       setProcessorMessage(
         frameError instanceof TypeError
           ? `Local processor not reachable at ${processorUrl}. Start the YELO inference gateway and check the device network.`
@@ -271,6 +291,8 @@ export default function CapturePage() {
       setDetections([]);
       setRestrictedZones(pairedCamera.restricted_zones ?? []);
       setViolationCount(0);
+      setEventCandidates([]);
+      setConfirmedEventCount(0);
       setModelName("");
     } catch (pairError) {
       setCamera(null);
@@ -289,6 +311,7 @@ export default function CapturePage() {
     setProcessorState("idle");
     setDetections([]);
     setViolationCount(0);
+    setEventCandidates([]);
     setProcessorMessage("Starts when the camera preview is running.");
   }
 
@@ -368,6 +391,8 @@ export default function CapturePage() {
       setDetections([]);
       setRestrictedZones([]);
       setViolationCount(0);
+      setEventCandidates([]);
+      setConfirmedEventCount(0);
       setModelName("");
     }
   }
@@ -553,8 +578,27 @@ export default function CapturePage() {
                 <div><dt>Latest objects</dt><dd>{detections.length}</dd></div>
                 <div><dt>Restricted areas</dt><dd>{restrictedZones.length}</dd></div>
                 <div><dt>Objects in zones</dt><dd className={violationCount > 0 ? "capture-warning-value" : ""}>{violationCount}</dd></div>
+                <div><dt>Confirming events</dt><dd>{eventCandidates.length}</dd></div>
+                <div><dt>Events reported</dt><dd>{confirmedEventCount}</dd></div>
                 <div><dt>YOLO inference</dt><dd>{inferenceLatency !== null ? `${inferenceLatency} ms` : "Waiting"}</dd></div>
               </dl>
+              {eventCandidates.length > 0 && (
+                <div className="capture-event-candidates" role="status" aria-live="polite">
+                  <strong>Checking possible littering</strong>
+                  {eventCandidates.map((candidate) => (
+                    <div key={`${candidate.zoneId}-${candidate.trackId}`}>
+                      <span>
+                        {candidate.label} #{candidate.trackId} in {candidate.zoneName}
+                        <small>
+                          Person #{candidate.personTrackId} associated · {candidate.stationary ? "stationary" : "timer restarted"}
+                        </small>
+                      </span>
+                      <progress max="1" value={candidate.progress} />
+                      <b>{Math.min(candidate.requiredSeconds, Math.round(candidate.elapsedSeconds))}/{candidate.requiredSeconds}s</b>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className={`capture-processor-note ${processorState}`}>
                 <Activity size={17} />
                 <p>{processorMessage}</p>

@@ -59,8 +59,22 @@ state is removed automatically. Active restricted-zone polygons are evaluated
 against each tracked object's bottom-center ground point and returned with the
 matching detection.
 
-Person-to-waste association, timed confirmation, incident generation, and
-evidence upload remain the next pipeline steps.
+The MVP event rule associates a nearby tracked person when a waste-like object
+first appears in a restricted zone. The waste track must remain nearly
+stationary for the camera's configured confirmation delay. Confirmed events are
+reported asynchronously to the `report-camera-event` Supabase Edge Function,
+which validates the camera token, uploads only the evidence JPEG, inserts the
+incident records, and creates realtime member notifications. Per-track
+cooldowns prevent duplicate alerts without suppressing a different waste item.
+
+Event controls:
+
+```text
+YELO_EVENT_STATIONARY_DISTANCE=0.015
+YELO_EVENT_PERSON_DISTANCE=0.3
+YELO_EVENT_COOLDOWN_SECONDS=120
+YELO_WASTE_CLASSES=bottle,cup,bowl,banana,apple,orange,backpack,handbag,suitcase
+```
 
 The public pretrained model is useful for people and common COCO objects. It is
 not a complete littering model. Replace it with the Colab-trained `best.pt` that

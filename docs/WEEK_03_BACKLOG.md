@@ -19,11 +19,11 @@
 
 ## Event Pipeline
 
-- [ ] Define person and waste-object association rules
-- [ ] Add littering confirmation timer
-- [ ] Upload incident evidence only
-- [ ] Insert detection event and media records
-- [ ] Publish realtime dashboard notifications
+- [x] Define person and waste-object association rules
+- [x] Add littering confirmation timer
+- [x] Upload incident evidence only
+- [x] Insert detection event and media records
+- [x] Publish realtime dashboard notifications
 
 ## Demo Target
 
