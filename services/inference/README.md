@@ -55,10 +55,12 @@ YELO_TRACKER_STALE_SECONDS=120
 The service now returns normalized boxes, labels, confidence, and inference
 time. ByteTrack maintains stable object IDs separately for every camera and
 returns normalized center-point trails and movement deltas. Inactive tracker
-state is removed automatically.
+state is removed automatically. Active restricted-zone polygons are evaluated
+against each tracked object's bottom-center ground point and returned with the
+matching detection.
 
-Restricted-zone rules, incident generation, and evidence upload remain the next
-pipeline steps.
+Person-to-waste association, timed confirmation, incident generation, and
+evidence upload remain the next pipeline steps.
 
 The public pretrained model is useful for people and common COCO objects. It is
 not a complete littering model. Replace it with the Colab-trained `best.pt` that

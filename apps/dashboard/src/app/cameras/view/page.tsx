@@ -11,8 +11,6 @@ import {
   Edit3,
   ExternalLink,
   LoaderCircle,
-  MapPin,
-  ShieldCheck,
   Trash2,
   Wifi,
   X,
@@ -20,9 +18,14 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
+import {
+  RestrictedZone,
+  ZoneEditor,
+} from "@/components/zone-editor";
 
 type CameraDetail = {
   id: string;
+  society_id: string;
   name: string;
   location_label: string | null;
   source_type: "mobile" | "webcam" | "rtsp" | "recorded_video";
@@ -31,7 +34,7 @@ type CameraDetail = {
   confidence_threshold: number;
   confirmation_seconds: number;
   last_seen_at: string | null;
-  restricted_zones: { id: string; name: string; is_active: boolean }[];
+  restricted_zones: RestrictedZone[];
 };
 
 type EditForm = {
@@ -135,7 +138,7 @@ export default function CameraDetailPage() {
       }
       const { data, error: loadError } = await auth.client!
         .from("cameras")
-        .select("id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, is_active)")
+        .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, polygon, is_active)")
         .eq("id", id)
         .maybeSingle();
       setCamera(data as CameraDetail | null);
@@ -168,7 +171,7 @@ export default function CameraDetailPage() {
         confirmation_seconds: form.confirmationSeconds,
       })
       .eq("id", camera.id)
-      .select("id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, is_active)")
+      .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, restricted_zones(id, name, polygon, is_active)")
       .single();
     setSaving(false);
     if (updateError || !data) {
@@ -255,9 +258,31 @@ export default function CameraDetailPage() {
       </details>
 
       <section className="panel zones-section">
-        <div className="panel-heading"><div><p className="eyebrow">Monitored areas</p><h2>Restricted zones</h2></div></div>
-        {camera.restricted_zones.length === 0 ? <div className="directory-state"><ShieldCheck size={28} /><h2>No restricted zones</h2><p>Zone drawing will be added after frame ingestion.</p></div>
-        : <div className="zone-cards">{camera.restricted_zones.map((zone) => <article key={zone.id}><div className="zone-icon"><ShieldCheck size={21} /></div><div><h3>{zone.name}</h3><p><MapPin size={14} /> Detection area</p></div><StatusPill status={zone.is_active ? "Active" : "Needs review"} /></article>)}</div>}
+        {canManage && auth.client ? (
+          <ZoneEditor
+            cameraId={camera.id}
+            societyId={camera.society_id}
+            client={auth.client}
+            zones={camera.restricted_zones}
+            onZonesChange={(restricted_zones) =>
+              setCamera((current) => current ? { ...current, restricted_zones } : current)
+            }
+          />
+        ) : (
+          <div className="zone-manager">
+            <div className="zone-manager-header">
+              <div><p className="eyebrow">Monitored areas</p><h2>Restricted zones</h2></div>
+            </div>
+            <div className="zone-list">
+              {camera.restricted_zones.map((zone) => (
+                <article key={zone.id}>
+                  <div><h3>{zone.name}</h3><p>{zone.polygon.length} boundary points</p></div>
+                  <StatusPill status={zone.is_active ? "Active" : "Paused"} />
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <dialog ref={editDialogRef} className="form-dialog" onCancel={(event) => { if (saving) event.preventDefault(); }} onClick={(event) => { if (event.target === editDialogRef.current && !saving) editDialogRef.current?.close(); }}>

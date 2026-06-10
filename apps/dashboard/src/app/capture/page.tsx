@@ -29,6 +29,7 @@ type CameraInfo = {
   status: string;
   last_seen_at: string | null;
   detection_enabled: boolean;
+  restricted_zones: RestrictedZone[];
 };
 
 type DeviceAction = "pair" | "heartbeat" | "disconnect";
@@ -40,9 +41,17 @@ type Detection = {
   confidence: number;
   trackId: number | null;
   center: { x: number; y: number };
+  groundPoint: { x: number; y: number };
   motion: { dx: number; dy: number; distance: number };
+  inRestrictedZone: boolean;
+  zones: { id: string; name: string }[];
   trail: { x: number; y: number }[];
   box: { x: number; y: number; width: number; height: number };
+};
+type RestrictedZone = {
+  id: string;
+  name: string;
+  polygon: { x: number; y: number }[];
 };
 
 const tokenStorageKey = "yelo-camera-device-token";
@@ -83,6 +92,8 @@ export default function CapturePage() {
   const [processorLatency, setProcessorLatency] = useState<number | null>(null);
   const [inferenceLatency, setInferenceLatency] = useState<number | null>(null);
   const [detections, setDetections] = useState<Detection[]>([]);
+  const [restrictedZones, setRestrictedZones] = useState<RestrictedZone[]>([]);
+  const [violationCount, setViolationCount] = useState(0);
   const [modelName, setModelName] = useState("");
   const [processorMessage, setProcessorMessage] = useState(
     "Starts when the camera preview is running.",
@@ -199,6 +210,10 @@ export default function CapturePage() {
       setProcessorLatency(Math.round(performance.now() - startedAt));
       setProcessorState("connected");
       setDetections(Array.isArray(result?.detections) ? result.detections : []);
+      setRestrictedZones(
+        Array.isArray(result?.restrictedZones) ? result.restrictedZones : [],
+      );
+      setViolationCount(Number(result?.violationCount) || 0);
       setInferenceLatency(
         Number.isFinite(Number(result?.inferenceMs))
           ? Math.round(Number(result.inferenceMs))
@@ -213,6 +228,7 @@ export default function CapturePage() {
     } catch (frameError) {
       setProcessorState("error");
       setDetections([]);
+      setViolationCount(0);
       setProcessorMessage(
         frameError instanceof TypeError
           ? `Local processor not reachable at ${processorUrl}. Start the YELO inference gateway and check the device network.`
@@ -253,6 +269,8 @@ export default function CapturePage() {
       setProcessorLatency(null);
       setInferenceLatency(null);
       setDetections([]);
+      setRestrictedZones(pairedCamera.restricted_zones ?? []);
+      setViolationCount(0);
       setModelName("");
     } catch (pairError) {
       setCamera(null);
@@ -270,6 +288,7 @@ export default function CapturePage() {
     setStreaming(false);
     setProcessorState("idle");
     setDetections([]);
+    setViolationCount(0);
     setProcessorMessage("Starts when the camera preview is running.");
   }
 
@@ -347,6 +366,8 @@ export default function CapturePage() {
       setProcessorLatency(null);
       setInferenceLatency(null);
       setDetections([]);
+      setRestrictedZones([]);
+      setViolationCount(0);
       setModelName("");
     }
   }
@@ -410,9 +431,16 @@ export default function CapturePage() {
               </div>
             )}
             {streaming && <span className="capture-live-label"><i /> Live preview</span>}
-            {streaming && detections.length > 0 && (
+            {streaming && (detections.length > 0 || restrictedZones.length > 0) && (
               <div className="capture-detection-layer" aria-hidden="true">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                  {restrictedZones.map((zone) => (
+                    <polygon
+                      className="restricted-zone-overlay"
+                      key={zone.id}
+                      points={zone.polygon.map((point) => `${point.x * 100},${point.y * 100}`).join(" ")}
+                    />
+                  ))}
                   {detections.map((detection, index) => (
                     detection.trail.length > 1 && (
                       <polyline
@@ -425,7 +453,7 @@ export default function CapturePage() {
                 </svg>
                 {detections.map((detection, index) => (
                   <span
-                    className={`capture-detection-box ${detection.label.toLowerCase() === "person" ? "person" : ""}`}
+                    className={`capture-detection-box ${detection.label.toLowerCase() === "person" ? "person" : ""} ${detection.inRestrictedZone ? "zone-violation" : ""}`}
                     key={`${detection.classId}-${index}`}
                     style={{
                       left: `${detection.box.x * 100}%`,
@@ -435,7 +463,7 @@ export default function CapturePage() {
                     }}
                   >
                     <small>
-                      {detection.label}{detection.trackId !== null ? ` #${detection.trackId}` : ""} {Math.round(detection.confidence * 100)}%
+                      {detection.inRestrictedZone ? "Restricted · " : ""}{detection.label}{detection.trackId !== null ? ` #${detection.trackId}` : ""} {Math.round(detection.confidence * 100)}%
                     </small>
                   </span>
                 ))}
@@ -523,6 +551,8 @@ export default function CapturePage() {
                 <div><dt>Processor</dt><dd><span className={`processor-dot ${processorState}`} /> {processorState === "connected" ? "Receiving" : processorState === "error" ? "Unavailable" : processorState === "sending" ? "Sending" : "Waiting"}</dd></div>
                 <div><dt>Frames sent</dt><dd>{framesSent}{processorLatency !== null ? ` · ${processorLatency} ms` : ""}</dd></div>
                 <div><dt>Latest objects</dt><dd>{detections.length}</dd></div>
+                <div><dt>Restricted areas</dt><dd>{restrictedZones.length}</dd></div>
+                <div><dt>Objects in zones</dt><dd className={violationCount > 0 ? "capture-warning-value" : ""}>{violationCount}</dd></div>
                 <div><dt>YOLO inference</dt><dd>{inferenceLatency !== null ? `${inferenceLatency} ms` : "Waiting"}</dd></div>
               </dl>
               <div className={`capture-processor-note ${processorState}`}>
@@ -535,7 +565,7 @@ export default function CapturePage() {
                   <div>
                     {detections.slice(0, 6).map((detection, index) => (
                       <span key={`${detection.classId}-summary-${index}`}>
-                        {detection.label}{detection.trackId !== null ? ` #${detection.trackId}` : ""} {Math.round(detection.confidence * 100)}%
+                        {detection.inRestrictedZone ? "Restricted · " : ""}{detection.label}{detection.trackId !== null ? ` #${detection.trackId}` : ""} {Math.round(detection.confidence * 100)}%
                       </span>
                     ))}
                   </div>

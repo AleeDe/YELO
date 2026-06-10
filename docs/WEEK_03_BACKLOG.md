@@ -12,10 +12,10 @@
 
 ## Restricted Zones
 
-- [ ] Draw a polygon over a captured camera frame
-- [ ] Save normalized polygon coordinates per camera
-- [ ] Validate at least three polygon points
-- [ ] Overlay the active zone during local processing
+- [x] Draw a polygon over a captured camera frame
+- [x] Save normalized polygon coordinates per camera
+- [x] Validate at least three polygon points
+- [x] Overlay the active zone during local processing
 
 ## Event Pipeline
 
@@ -28,8 +28,8 @@
 ## Demo Target
 
 One mobile camera and one webcam can send sampled frames to the local laptop.
-The local service validates each camera, processes frames in memory, and reports
-delivery health before YOLO and event generation are enabled.
+The local service validates each camera, processes frames in memory, runs YOLO
+tracking, and reports objects that enter an active restricted zone.
 
 ## Later Deployment Milestone
 

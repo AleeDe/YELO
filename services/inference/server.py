@@ -44,6 +44,59 @@ camera_model_seen: dict[str, float] = {}
 track_history: dict[str, dict[int, list[tuple[float, float]]]] = {}
 
 
+def normalized_polygon(value: Any) -> list[tuple[float, float]]:
+    if not isinstance(value, list):
+        return []
+    polygon: list[tuple[float, float]] = []
+    for point in value:
+        if not isinstance(point, dict):
+            return []
+        try:
+            x = float(point["x"])
+            y = float(point["y"])
+        except (KeyError, TypeError, ValueError):
+            return []
+        if not 0 <= x <= 1 or not 0 <= y <= 1:
+            return []
+        polygon.append((x, y))
+    return polygon if len(polygon) >= 3 else []
+
+
+def point_in_polygon(point: tuple[float, float], polygon: list[tuple[float, float]]) -> bool:
+    """Return whether a normalized point is inside a polygon."""
+    x, y = point
+    inside = False
+    previous_x, previous_y = polygon[-1]
+    for current_x, current_y in polygon:
+        crosses_y = (current_y > y) != (previous_y > y)
+        if crosses_y:
+            boundary_x = (
+                (previous_x - current_x)
+                * (y - current_y)
+                / (previous_y - current_y)
+                + current_x
+            )
+            if x < boundary_x:
+                inside = not inside
+        previous_x, previous_y = current_x, current_y
+    return inside
+
+
+def camera_zones(camera: dict[str, Any]) -> list[dict[str, Any]]:
+    zones: list[dict[str, Any]] = []
+    for value in camera.get("restricted_zones", []):
+        polygon = normalized_polygon(value.get("polygon"))
+        if value.get("is_active") and polygon:
+            zones.append(
+                {
+                    "id": str(value["id"]),
+                    "name": str(value["name"]),
+                    "polygon": polygon,
+                }
+            )
+    return zones
+
+
 def load_model() -> None:
     global model, model_error
     try:
@@ -163,6 +216,8 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
     detections: list[dict[str, Any]] = []
     inference_ms: float | None = None
     camera_id = str(camera["id"])
+    zones = camera_zones(camera)
+    violations: list[dict[str, Any]] = []
 
     if model is not None:
         import cv2
@@ -212,6 +267,15 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
                     round((normalized_x1 + normalized_x2) / 2, 5),
                     round((normalized_y1 + normalized_y2) / 2, 5),
                 )
+                ground_point = (
+                    center[0],
+                    round(normalized_y2, 5),
+                )
+                matched_zones = [
+                    {"id": zone["id"], "name": zone["name"]}
+                    for zone in zones
+                    if point_in_polygon(ground_point, zone["polygon"])
+                ]
                 trail: list[tuple[float, float]] = []
                 motion = {"dx": 0.0, "dy": 0.0, "distance": 0.0}
                 if track_id is not None:
@@ -234,7 +298,13 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
                         "confidence": round(float(confidence), 4),
                         "trackId": track_id,
                         "center": {"x": center[0], "y": center[1]},
+                        "groundPoint": {
+                            "x": ground_point[0],
+                            "y": ground_point[1],
+                        },
                         "motion": motion,
+                        "inRestrictedZone": bool(matched_zones),
+                        "zones": matched_zones,
                         "trail": [
                             {"x": point[0], "y": point[1]}
                             for point in trail
@@ -247,6 +317,15 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
                         },
                     }
                 )
+                if matched_zones:
+                    violations.append(
+                        {
+                            "trackId": track_id,
+                            "label": label,
+                            "confidence": round(float(confidence), 4),
+                            "zones": matched_zones,
+                        }
+                    )
             for stale_track_id in set(histories) - active_track_ids:
                 histories.pop(stale_track_id, None)
 
@@ -269,6 +348,19 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
         "bytes": len(frame),
         "detections": detections,
         "detectionCount": len(detections),
+        "restrictedZones": [
+            {
+                "id": zone["id"],
+                "name": zone["name"],
+                "polygon": [
+                    {"x": point[0], "y": point[1]}
+                    for point in zone["polygon"]
+                ],
+            }
+            for zone in zones
+        ],
+        "violations": violations,
+        "violationCount": len(violations),
         "inferenceMs": inference_ms,
         "modelReady": model is not None,
         "modelName": MODEL_PATH if model is not None else None,
