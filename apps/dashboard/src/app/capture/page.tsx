@@ -38,6 +38,10 @@ type Detection = {
   classId: number;
   label: string;
   confidence: number;
+  trackId: number | null;
+  center: { x: number; y: number };
+  motion: { dx: number; dy: number; distance: number };
+  trail: { x: number; y: number }[];
   box: { x: number; y: number; width: number; height: number };
 };
 
@@ -408,6 +412,17 @@ export default function CapturePage() {
             {streaming && <span className="capture-live-label"><i /> Live preview</span>}
             {streaming && detections.length > 0 && (
               <div className="capture-detection-layer" aria-hidden="true">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                  {detections.map((detection, index) => (
+                    detection.trail.length > 1 && (
+                      <polyline
+                        className={detection.label.toLowerCase() === "person" ? "person" : ""}
+                        key={`trail-${detection.trackId ?? index}`}
+                        points={detection.trail.map((point) => `${point.x * 100},${point.y * 100}`).join(" ")}
+                      />
+                    )
+                  ))}
+                </svg>
                 {detections.map((detection, index) => (
                   <span
                     className={`capture-detection-box ${detection.label.toLowerCase() === "person" ? "person" : ""}`}
@@ -419,7 +434,9 @@ export default function CapturePage() {
                       height: `${detection.box.height * 100}%`,
                     }}
                   >
-                    <small>{detection.label} {Math.round(detection.confidence * 100)}%</small>
+                    <small>
+                      {detection.label}{detection.trackId !== null ? ` #${detection.trackId}` : ""} {Math.round(detection.confidence * 100)}%
+                    </small>
                   </span>
                 ))}
               </div>
@@ -518,7 +535,7 @@ export default function CapturePage() {
                   <div>
                     {detections.slice(0, 6).map((detection, index) => (
                       <span key={`${detection.classId}-summary-${index}`}>
-                        {detection.label} {Math.round(detection.confidence * 100)}%
+                        {detection.label}{detection.trackId !== null ? ` #${detection.trackId}` : ""} {Math.round(detection.confidence * 100)}%
                       </span>
                     ))}
                   </div>

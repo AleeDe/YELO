@@ -48,11 +48,17 @@ YELO_MODEL_DEVICE=cpu
 YELO_MODEL_CONFIDENCE=0.35
 YELO_MODEL_IMAGE_SIZE=640
 YELO_DETECTION_CLASSES=person,bottle,cup
+YELO_TRACKER_CONFIG=bytetrack.yaml
+YELO_TRACKER_STALE_SECONDS=120
 ```
 
 The service now returns normalized boxes, labels, confidence, and inference
-time. Tracking, restricted-zone rules, incident generation, and evidence upload
-remain the next pipeline steps.
+time. ByteTrack maintains stable object IDs separately for every camera and
+returns normalized center-point trails and movement deltas. Inactive tracker
+state is removed automatically.
+
+Restricted-zone rules, incident generation, and evidence upload remain the next
+pipeline steps.
 
 The public pretrained model is useful for people and common COCO objects. It is
 not a complete littering model. Replace it with the Colab-trained `best.pt` that

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import struct
 import threading
@@ -24,6 +25,9 @@ MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26n.pt")
 MODEL_DEVICE = os.getenv("YELO_MODEL_DEVICE", "cpu")
 MODEL_CONFIDENCE = float(os.getenv("YELO_MODEL_CONFIDENCE", "0.35"))
 MODEL_IMAGE_SIZE = int(os.getenv("YELO_MODEL_IMAGE_SIZE", "640"))
+TRACKER_CONFIG = os.getenv("YELO_TRACKER_CONFIG", "bytetrack.yaml")
+TRACKER_STALE_SECONDS = int(os.getenv("YELO_TRACKER_STALE_SECONDS", "120"))
+TRACK_HISTORY_LENGTH = int(os.getenv("YELO_TRACK_HISTORY_LENGTH", "20"))
 configured_classes = {
     value.strip().lower()
     for value in os.getenv("YELO_DETECTION_CLASSES", "").split(",")
@@ -35,6 +39,9 @@ frame_stats: dict[str, dict[str, Any]] = {}
 model_lock = threading.Lock()
 model: Any | None = None
 model_error: str | None = None
+camera_models: dict[str, Any] = {}
+camera_model_seen: dict[str, float] = {}
+track_history: dict[str, dict[int, list[tuple[float, float]]]] = {}
 
 
 def load_model() -> None:
@@ -50,6 +57,32 @@ def load_model() -> None:
 
 
 load_model()
+
+
+def cleanup_stale_trackers(now: float) -> None:
+    stale_camera_ids = [
+        camera_id
+        for camera_id, last_seen in camera_model_seen.items()
+        if now - last_seen > TRACKER_STALE_SECONDS
+    ]
+    for camera_id in stale_camera_ids:
+        camera_models.pop(camera_id, None)
+        camera_model_seen.pop(camera_id, None)
+        track_history.pop(camera_id, None)
+
+
+def camera_model(camera_id: str) -> Any:
+    from ultralytics import YOLO
+
+    now = time.monotonic()
+    cleanup_stale_trackers(now)
+    tracker_model = camera_models.get(camera_id)
+    if tracker_model is None:
+        tracker_model = YOLO(MODEL_PATH)
+        camera_models[camera_id] = tracker_model
+        track_history[camera_id] = {}
+    camera_model_seen[camera_id] = now
+    return tracker_model
 
 
 def json_bytes(payload: dict[str, Any]) -> bytes:
@@ -129,6 +162,7 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
     width, height = dimensions
     detections: list[dict[str, Any]] = []
     inference_ms: float | None = None
+    camera_id = str(camera["id"])
 
     if model is not None:
         import cv2
@@ -138,8 +172,10 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
         if image is None:
             raise ValueError("OpenCV could not decode the JPEG frame.")
         with model_lock:
-            result = model.predict(
+            result = camera_model(camera_id).track(
                 source=image,
+                persist=True,
+                tracker=TRACKER_CONFIG,
                 conf=MODEL_CONFIDENCE,
                 imgsz=MODEL_IMAGE_SIZE,
                 device=MODEL_DEVICE,
@@ -151,7 +187,18 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
             boxes = result.boxes.xyxy.cpu().tolist()
             confidences = result.boxes.conf.cpu().tolist()
             class_ids = result.boxes.cls.cpu().tolist()
-            for box, confidence, class_id_value in zip(boxes, confidences, class_ids):
+            if result.boxes.is_track and result.boxes.id is not None:
+                track_ids: list[int | None] = result.boxes.id.int().cpu().tolist()
+            else:
+                track_ids = [None] * len(boxes)
+            histories = track_history.setdefault(camera_id, {})
+            active_track_ids: set[int] = set()
+            for box, confidence, class_id_value, track_id in zip(
+                boxes,
+                confidences,
+                class_ids,
+                track_ids,
+            ):
                 class_id = int(class_id_value)
                 label = str(result.names[class_id])
                 if configured_classes and label.lower() not in configured_classes:
@@ -161,11 +208,37 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
                 normalized_y1 = min(1.0, max(0.0, y1 / height))
                 normalized_x2 = min(1.0, max(0.0, x2 / width))
                 normalized_y2 = min(1.0, max(0.0, y2 / height))
+                center = (
+                    round((normalized_x1 + normalized_x2) / 2, 5),
+                    round((normalized_y1 + normalized_y2) / 2, 5),
+                )
+                trail: list[tuple[float, float]] = []
+                motion = {"dx": 0.0, "dy": 0.0, "distance": 0.0}
+                if track_id is not None:
+                    active_track_ids.add(track_id)
+                    trail = histories.setdefault(track_id, [])
+                    previous = trail[-1] if trail else center
+                    trail.append(center)
+                    del trail[:-TRACK_HISTORY_LENGTH]
+                    dx = center[0] - previous[0]
+                    dy = center[1] - previous[1]
+                    motion = {
+                        "dx": round(dx, 5),
+                        "dy": round(dy, 5),
+                        "distance": round(math.hypot(dx, dy), 5),
+                    }
                 detections.append(
                     {
                         "classId": class_id,
                         "label": label,
                         "confidence": round(float(confidence), 4),
+                        "trackId": track_id,
+                        "center": {"x": center[0], "y": center[1]},
+                        "motion": motion,
+                        "trail": [
+                            {"x": point[0], "y": point[1]}
+                            for point in trail
+                        ],
                         "box": {
                             "x": round(normalized_x1, 5),
                             "y": round(normalized_y1, 5),
@@ -174,8 +247,9 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
                         },
                     }
                 )
+            for stale_track_id in set(histories) - active_track_ids:
+                histories.pop(stale_track_id, None)
 
-    camera_id = str(camera["id"])
     stats = frame_stats.setdefault(camera_id, {"received": 0})
     stats.update(
         {
@@ -237,6 +311,8 @@ class Handler(BaseHTTPRequestHandler):
                     "modelName": MODEL_PATH if model is not None else None,
                     "modelDevice": MODEL_DEVICE,
                     "modelError": model_error,
+                    "tracker": TRACKER_CONFIG,
+                    "activeTrackers": len(camera_models),
                     "confidence": MODEL_CONFIDENCE,
                     "classFilter": sorted(configured_classes),
                     "activeCameras": len(frame_stats),

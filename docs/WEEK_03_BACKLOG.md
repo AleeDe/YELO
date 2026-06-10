@@ -8,7 +8,7 @@
 - [x] Show frame delivery and gateway health in Capture
 - [x] Avoid continuous-frame storage
 - [x] Add YOLO model loading and object detections
-- [ ] Add object tracking
+- [x] Add object tracking
 
 ## Restricted Zones
 
