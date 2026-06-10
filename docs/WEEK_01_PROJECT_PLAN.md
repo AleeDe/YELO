@@ -68,6 +68,11 @@ Important limitations:
 - A production deployment with many continuous cameras will eventually need
   paid compute and storage.
 
+After the local MVP is complete, the planned production path is to keep the
+Next.js dashboard on Vercel and deploy the containerized Python/YOLO inference
+service on AWS EC2 behind HTTPS. AWS deployment is intentionally deferred until
+tracking, restricted-zone rules, and incident generation work locally.
+
 ## 5. User Roles
 
 ### Super Admin
@@ -242,4 +247,3 @@ The final MVP succeeds when:
 6. Evidence appears in the correct society dashboard.
 7. An administrator can review and resolve the incident.
 8. A false alert can be rejected and retained for evaluation.
-

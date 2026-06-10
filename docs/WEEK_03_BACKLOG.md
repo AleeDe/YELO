@@ -30,3 +30,17 @@
 One mobile camera and one webcam can send sampled frames to the local laptop.
 The local service validates each camera, processes frames in memory, and reports
 delivery health before YOLO and event generation are enabled.
+
+## Later Deployment Milestone
+
+Deploy the completed inference service to AWS only after local tracking,
+restricted zones, and incident generation are stable.
+
+- [ ] Containerize the Python and YOLO inference service
+- [ ] Deploy the container to an AWS EC2 instance
+- [ ] Add a domain and HTTPS reverse proxy
+- [ ] Store Supabase and model configuration in AWS-managed secrets
+- [ ] Restrict inbound traffic and keep camera-token validation enabled
+- [ ] Connect Vercel Capture clients to the HTTPS inference endpoint
+- [ ] Add health checks, logs, restart policy, and cost alerts
+- [ ] Measure CPU performance before considering a paid GPU instance

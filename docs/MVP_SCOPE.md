@@ -31,6 +31,7 @@
 ## Could Have
 
 - CCTV RTSP integration
+- AWS EC2 deployment for the completed YOLO inference service
 - Multiple restricted zones per camera
 - Push notifications
 - Heatmaps
@@ -46,4 +47,3 @@
 - Guaranteed detection of tiny or hidden waste
 - Unlimited continuous cloud video recording
 - Large-scale 24/7 cloud inference
-
