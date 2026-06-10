@@ -34,6 +34,12 @@ type CameraInfo = {
 type DeviceAction = "pair" | "heartbeat" | "disconnect";
 type FacingMode = "user" | "environment";
 type ProcessorState = "idle" | "sending" | "connected" | "error";
+type Detection = {
+  classId: number;
+  label: string;
+  confidence: number;
+  box: { x: number; y: number; width: number; height: number };
+};
 
 const tokenStorageKey = "yelo-camera-device-token";
 const processorUrlStorageKey = "yelo-inference-url";
@@ -65,11 +71,15 @@ export default function CapturePage() {
   const [starting, setStarting] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [facingMode, setFacingMode] = useState<FacingMode>("environment");
+  const [videoAspectRatio, setVideoAspectRatio] = useState("16 / 9");
   const [lastHeartbeat, setLastHeartbeat] = useState<Date | null>(null);
   const [processorState, setProcessorState] = useState<ProcessorState>("idle");
   const [processorUrl, setProcessorUrl] = useState(inferenceUrl);
   const [framesSent, setFramesSent] = useState(0);
   const [processorLatency, setProcessorLatency] = useState<number | null>(null);
+  const [inferenceLatency, setInferenceLatency] = useState<number | null>(null);
+  const [detections, setDetections] = useState<Detection[]>([]);
+  const [modelName, setModelName] = useState("");
   const [processorMessage, setProcessorMessage] = useState(
     "Starts when the camera preview is running.",
   );
@@ -184,13 +194,21 @@ export default function CapturePage() {
       }
       setProcessorLatency(Math.round(performance.now() - startedAt));
       setProcessorState("connected");
+      setDetections(Array.isArray(result?.detections) ? result.detections : []);
+      setInferenceLatency(
+        Number.isFinite(Number(result?.inferenceMs))
+          ? Math.round(Number(result.inferenceMs))
+          : null,
+      );
+      setModelName(typeof result?.modelName === "string" ? result.modelName : "");
       setProcessorMessage(
         result?.modelReady
-          ? "Frames are reaching the detection model."
+          ? `${Number(result?.detectionCount) || 0} objects detected in the latest frame.`
           : "Frames are reaching the local gateway. YOLO is not loaded yet.",
       );
     } catch (frameError) {
       setProcessorState("error");
+      setDetections([]);
       setProcessorMessage(
         frameError instanceof TypeError
           ? `Local processor not reachable at ${processorUrl}. Start the YELO inference gateway and check the device network.`
@@ -229,6 +247,9 @@ export default function CapturePage() {
       setLastHeartbeat(new Date());
       setFramesSent(0);
       setProcessorLatency(null);
+      setInferenceLatency(null);
+      setDetections([]);
+      setModelName("");
     } catch (pairError) {
       setCamera(null);
       window.sessionStorage.removeItem(tokenStorageKey);
@@ -244,6 +265,7 @@ export default function CapturePage() {
     if (videoRef.current) videoRef.current.srcObject = null;
     setStreaming(false);
     setProcessorState("idle");
+    setDetections([]);
     setProcessorMessage("Starts when the camera preview is running.");
   }
 
@@ -283,6 +305,11 @@ export default function CapturePage() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+        if (videoRef.current.videoWidth && videoRef.current.videoHeight) {
+          setVideoAspectRatio(
+            `${videoRef.current.videoWidth} / ${videoRef.current.videoHeight}`,
+          );
+        }
       }
       setFacingMode(nextFacingMode);
       setStreaming(true);
@@ -314,6 +341,9 @@ export default function CapturePage() {
       setLastHeartbeat(null);
       setFramesSent(0);
       setProcessorLatency(null);
+      setInferenceLatency(null);
+      setDetections([]);
+      setModelName("");
     }
   }
 
@@ -363,7 +393,10 @@ export default function CapturePage() {
             )}
           </div>
 
-          <div className={`capture-video-frame ${streaming ? "is-live" : ""}`}>
+          <div
+            className={`capture-video-frame ${streaming ? "is-live" : ""}`}
+            style={streaming ? { aspectRatio: videoAspectRatio } : undefined}
+          >
             <video ref={videoRef} muted playsInline aria-label="Live camera preview" />
             {!streaming && (
               <div className="capture-video-empty">
@@ -373,6 +406,24 @@ export default function CapturePage() {
               </div>
             )}
             {streaming && <span className="capture-live-label"><i /> Live preview</span>}
+            {streaming && detections.length > 0 && (
+              <div className="capture-detection-layer" aria-hidden="true">
+                {detections.map((detection, index) => (
+                  <span
+                    className={`capture-detection-box ${detection.label.toLowerCase() === "person" ? "person" : ""}`}
+                    key={`${detection.classId}-${index}`}
+                    style={{
+                      left: `${detection.box.x * 100}%`,
+                      top: `${detection.box.y * 100}%`,
+                      width: `${detection.box.width * 100}%`,
+                      height: `${detection.box.height * 100}%`,
+                    }}
+                  >
+                    <small>{detection.label} {Math.round(detection.confidence * 100)}%</small>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && (
@@ -454,11 +505,26 @@ export default function CapturePage() {
                 <div><dt>Detection</dt><dd>{camera.detection_enabled ? "Enabled" : "Paused"}</dd></div>
                 <div><dt>Processor</dt><dd><span className={`processor-dot ${processorState}`} /> {processorState === "connected" ? "Receiving" : processorState === "error" ? "Unavailable" : processorState === "sending" ? "Sending" : "Waiting"}</dd></div>
                 <div><dt>Frames sent</dt><dd>{framesSent}{processorLatency !== null ? ` · ${processorLatency} ms` : ""}</dd></div>
+                <div><dt>Latest objects</dt><dd>{detections.length}</dd></div>
+                <div><dt>YOLO inference</dt><dd>{inferenceLatency !== null ? `${inferenceLatency} ms` : "Waiting"}</dd></div>
               </dl>
               <div className={`capture-processor-note ${processorState}`}>
                 <Activity size={17} />
                 <p>{processorMessage}</p>
               </div>
+              {detections.length > 0 && (
+                <div className="capture-detection-summary" role="status" aria-live="polite">
+                  <strong>Latest detections</strong>
+                  <div>
+                    {detections.slice(0, 6).map((detection, index) => (
+                      <span key={`${detection.classId}-summary-${index}`}>
+                        {detection.label} {Math.round(detection.confidence * 100)}%
+                      </span>
+                    ))}
+                  </div>
+                  {modelName && <small>Model: {modelName}</small>}
+                </div>
+              )}
               <details className="capture-advanced">
                 <summary className="focus-ring">Processor connection</summary>
                 <label className="form-field">

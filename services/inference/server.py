@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import struct
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -19,9 +20,36 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 MAX_FRAME_BYTES = 2 * 1024 * 1024
 TOKEN_CACHE_SECONDS = 30
+MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26n.pt")
+MODEL_DEVICE = os.getenv("YELO_MODEL_DEVICE", "cpu")
+MODEL_CONFIDENCE = float(os.getenv("YELO_MODEL_CONFIDENCE", "0.35"))
+MODEL_IMAGE_SIZE = int(os.getenv("YELO_MODEL_IMAGE_SIZE", "640"))
+configured_classes = {
+    value.strip().lower()
+    for value in os.getenv("YELO_DETECTION_CLASSES", "").split(",")
+    if value.strip()
+}
 
 token_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 frame_stats: dict[str, dict[str, Any]] = {}
+model_lock = threading.Lock()
+model: Any | None = None
+model_error: str | None = None
+
+
+def load_model() -> None:
+    global model, model_error
+    try:
+        from ultralytics import YOLO
+
+        model = YOLO(MODEL_PATH)
+        model_error = None
+    except Exception as error:  # Optional runtime dependency and model file.
+        model = None
+        model_error = str(error)
+
+
+load_model()
 
 
 def json_bytes(payload: dict[str, Any]) -> bytes:
@@ -94,11 +122,59 @@ def validate_camera(token: str, expected_camera_id: str) -> dict[str, Any]:
 
 
 def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
-    """YOLO and tracking will replace this metadata-only processing hook."""
+    """Run YOLO on one in-memory JPEG and return normalized detections."""
     dimensions = jpeg_dimensions(frame)
     if not dimensions:
         raise ValueError("The request body is not a valid JPEG frame.")
     width, height = dimensions
+    detections: list[dict[str, Any]] = []
+    inference_ms: float | None = None
+
+    if model is not None:
+        import cv2
+        import numpy
+
+        image = cv2.imdecode(numpy.frombuffer(frame, dtype=numpy.uint8), cv2.IMREAD_COLOR)
+        if image is None:
+            raise ValueError("OpenCV could not decode the JPEG frame.")
+        with model_lock:
+            result = model.predict(
+                source=image,
+                conf=MODEL_CONFIDENCE,
+                imgsz=MODEL_IMAGE_SIZE,
+                device=MODEL_DEVICE,
+                max_det=100,
+                verbose=False,
+            )[0]
+        inference_ms = round(float(result.speed.get("inference", 0)), 1)
+        if result.boxes is not None:
+            boxes = result.boxes.xyxy.cpu().tolist()
+            confidences = result.boxes.conf.cpu().tolist()
+            class_ids = result.boxes.cls.cpu().tolist()
+            for box, confidence, class_id_value in zip(boxes, confidences, class_ids):
+                class_id = int(class_id_value)
+                label = str(result.names[class_id])
+                if configured_classes and label.lower() not in configured_classes:
+                    continue
+                x1, y1, x2, y2 = box
+                normalized_x1 = min(1.0, max(0.0, x1 / width))
+                normalized_y1 = min(1.0, max(0.0, y1 / height))
+                normalized_x2 = min(1.0, max(0.0, x2 / width))
+                normalized_y2 = min(1.0, max(0.0, y2 / height))
+                detections.append(
+                    {
+                        "classId": class_id,
+                        "label": label,
+                        "confidence": round(float(confidence), 4),
+                        "box": {
+                            "x": round(normalized_x1, 5),
+                            "y": round(normalized_y1, 5),
+                            "width": round(max(0.0, normalized_x2 - normalized_x1), 5),
+                            "height": round(max(0.0, normalized_y2 - normalized_y1), 5),
+                        },
+                    }
+                )
+
     camera_id = str(camera["id"])
     stats = frame_stats.setdefault(camera_id, {"received": 0})
     stats.update(
@@ -117,8 +193,11 @@ def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
         "width": width,
         "height": height,
         "bytes": len(frame),
-        "detections": [],
-        "modelReady": False,
+        "detections": detections,
+        "detectionCount": len(detections),
+        "inferenceMs": inference_ms,
+        "modelReady": model is not None,
+        "modelName": MODEL_PATH if model is not None else None,
     }
 
 
@@ -154,7 +233,12 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "status": "ready",
                     "service": "yelo-inference",
-                    "modelReady": False,
+                    "modelReady": model is not None,
+                    "modelName": MODEL_PATH if model is not None else None,
+                    "modelDevice": MODEL_DEVICE,
+                    "modelError": model_error,
+                    "confidence": MODEL_CONFIDENCE,
+                    "classFilter": sorted(configured_classes),
                     "activeCameras": len(frame_stats),
                 },
             )
@@ -207,4 +291,8 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"YELO inference gateway listening on http://{HOST}:{PORT}")
     print("Frames are validated and processed in memory; continuous video is not stored.")
+    if model is not None:
+        print(f"YOLO model ready: {MODEL_PATH} on {MODEL_DEVICE}")
+    else:
+        print(f"YOLO model unavailable: {model_error}")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

@@ -7,7 +7,7 @@
 - [x] Send compressed mobile and webcam frames once per second
 - [x] Show frame delivery and gateway health in Capture
 - [x] Avoid continuous-frame storage
-- [ ] Add YOLO model loading and object detections
+- [x] Add YOLO model loading and object detections
 - [ ] Add object tracking
 
 ## Restricted Zones
