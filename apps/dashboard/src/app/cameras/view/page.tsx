@@ -23,6 +23,10 @@ import {
   RestrictedZone,
   ZoneEditor,
 } from "@/components/zone-editor";
+import {
+  WebRtcState,
+  WebRtcViewer,
+} from "@/components/live-webrtc";
 
 type CameraDetail = {
   id: string;
@@ -36,6 +40,7 @@ type CameraDetail = {
   confirmation_seconds: number;
   last_seen_at: string | null;
   latest_frame_at: string | null;
+  signaling_key: string;
   restricted_zones: RestrictedZone[];
 };
 
@@ -120,6 +125,7 @@ export default function CameraDetailPage() {
   const router = useRouter();
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
+  const liveVideoRef = useRef<HTMLVideoElement>(null);
   const [camera, setCamera] = useState<CameraDetail | null>(null);
   const [form, setForm] = useState<EditForm | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -130,6 +136,7 @@ export default function CameraDetailPage() {
   const [feedback, setFeedback] = useState("");
   const [liveFrameUrl, setLiveFrameUrl] = useState("");
   const [previewClock, setPreviewClock] = useState(() => Date.now());
+  const [webRtcState, setWebRtcState] = useState<WebRtcState>("waiting");
   const canManage = auth.role === "super_admin" || auth.role === "society_admin";
   const cameraId = camera?.id ?? null;
   const cameraSocietyId = camera?.society_id ?? null;
@@ -144,7 +151,7 @@ export default function CameraDetailPage() {
       }
       const { data, error: loadError } = await auth.client!
         .from("cameras")
-        .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, latest_frame_at, restricted_zones(id, name, polygon, is_active)")
+        .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, latest_frame_at, signaling_key, restricted_zones(id, name, polygon, is_active)")
         .eq("id", id)
         .maybeSingle();
       setCamera(data as CameraDetail | null);
@@ -189,12 +196,15 @@ export default function CameraDetailPage() {
     }
 
     void refreshPreview();
-    const interval = window.setInterval(() => void refreshPreview(), 2_000);
+    const interval = window.setInterval(
+      () => void refreshPreview(),
+      webRtcState === "connected" ? 10_000 : 2_000,
+    );
     return () => {
       active = false;
       window.clearInterval(interval);
     };
-  }, [auth.client, cameraId, cameraSocietyId]);
+  }, [auth.client, cameraId, cameraSocietyId, webRtcState]);
 
   function openEditDialog() {
     if (!camera) return;
@@ -219,7 +229,7 @@ export default function CameraDetailPage() {
         confirmation_seconds: form.confirmationSeconds,
       })
       .eq("id", camera.id)
-      .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, latest_frame_at, restricted_zones(id, name, polygon, is_active)")
+      .select("id, society_id, name, location_label, source_type, status, detection_enabled, confidence_threshold, confirmation_seconds, last_seen_at, latest_frame_at, signaling_key, restricted_zones(id, name, polygon, is_active)")
       .single();
     setSaving(false);
     if (updateError || !data) {
@@ -259,9 +269,24 @@ export default function CameraDetailPage() {
     ? Math.max(0, Math.round((previewClock - new Date(camera.latest_frame_at).getTime()) / 1000))
     : null;
   const frameIsFresh = frameAgeSeconds !== null && frameAgeSeconds <= 10;
+  const previewLabel =
+    webRtcState === "connected"
+      ? "Live WebRTC"
+      : webRtcState === "failed"
+        ? "Direct connection unavailable · sampled preview"
+        : frameIsFresh
+          ? "Connecting · sampled preview"
+          : "Last available frame";
 
   return (
     <>
+      <WebRtcViewer
+        client={auth.client}
+        cameraId={camera.id}
+        signalingKey={camera.signaling_key}
+        videoRef={liveVideoRef}
+        onStateChange={setWebRtcState}
+      />
       <Link href="/cameras" className="back-link focus-ring"><ArrowLeft size={18} /> Back to cameras</Link>
       <div className="detail-heading camera-detail-heading">
         <div><p className="eyebrow">{camera.id.slice(0, 8)}</p><h1>{camera.name}</h1><p className="page-subtitle">{camera.location_label || "No location label"} · {sourceLabels[camera.source_type]}</p></div>
@@ -277,7 +302,15 @@ export default function CameraDetailPage() {
             <div><p className="eyebrow">Camera source</p><h2>{camera.status === "online" ? "Live camera" : "Camera is offline"}</h2></div>
             {(camera.source_type === "mobile" || camera.source_type === "webcam") && <Link className="primary-button focus-ring camera-connect-action" href={`/capture?returnTo=${encodeURIComponent(`/cameras/view?id=${camera.id}`)}`}>Connect camera <ExternalLink size={17} /></Link>}
           </div>
-          <div className={`live-preview ${liveFrameUrl ? "has-live-frame" : ""}`}>
+          <div className={`live-preview ${liveFrameUrl || webRtcState === "connected" ? "has-live-frame" : ""} ${webRtcState === "connected" ? "has-webrtc" : ""}`}>
+            <video
+              ref={liveVideoRef}
+              className="dashboard-webrtc-video"
+              muted
+              autoPlay
+              playsInline
+              aria-label={`Live WebRTC video from ${camera.name}`}
+            />
             {liveFrameUrl ? (
               <>
                 <Image
@@ -287,20 +320,20 @@ export default function CameraDetailPage() {
                   src={liveFrameUrl}
                   alt={`Latest sampled frame from ${camera.name}`}
                 />
-                <span className={`dashboard-live-badge ${frameIsFresh ? "fresh" : "stale"}`}>
-                  <i /> {frameIsFresh ? "Live sampled preview" : "Last available frame"}
+                <span className={`dashboard-live-badge ${webRtcState === "connected" || frameIsFresh ? "fresh" : "stale"}`}>
+                  <i /> {previewLabel}
                 </span>
                 <span className="dashboard-frame-time">
-                  {frameAgeSeconds !== null ? `${frameAgeSeconds}s ago` : "Waiting"}
+                  {webRtcState === "connected" ? "Near real time" : frameAgeSeconds !== null ? `${frameAgeSeconds}s ago` : "Waiting"}
                 </span>
               </>
-            ) : (
+            ) : webRtcState !== "connected" ? (
               <>
                 <span className="preview-empty-icon"><Camera size={34} /></span>
                 <strong>{camera.status === "online" ? "Waiting for first preview frame" : "No live preview"}</strong>
                 <p>{camera.status === "online" ? "Keep Capture open and confirm that Dashboard preview shows a recent time." : "Connect and start the camera to publish sampled preview frames."}</p>
               </>
-            )}
+            ) : null}
           </div>
         </section>
         <aside className="panel camera-summary-card" aria-label="Camera status summary">
@@ -308,6 +341,7 @@ export default function CameraDetailPage() {
           <dl className="camera-summary-grid">
             <div><dt><Wifi size={16} /> Status</dt><dd>{status}</dd></div>
             <div><dt><Camera size={16} /> Source</dt><dd>{sourceLabels[camera.source_type]}</dd></div>
+            <div><dt>Live video</dt><dd>{webRtcState === "connected" ? "WebRTC connected" : webRtcState === "connecting" ? "Connecting" : "Sampled fallback"}</dd></div>
             <div><dt><Clock3 size={16} /> Last contact</dt><dd>{camera.last_seen_at ? new Date(camera.last_seen_at).toLocaleString() : "Never"}</dd></div>
             <div><dt>Enabled</dt><dd>{camera.detection_enabled ? "Yes" : "No"}</dd></div>
             <div><dt>Confidence threshold</dt><dd>{Math.round(Number(camera.confidence_threshold) * 100)}%</dd></div>

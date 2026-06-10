@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WebRtcPublisher } from "@/components/live-webrtc";
+import { createClient } from "@/lib/supabase/client";
 import {
   inferenceUrl,
   supabaseAnonKey,
@@ -30,6 +32,7 @@ type CameraInfo = {
   status: string;
   last_seen_at: string | null;
   detection_enabled: boolean;
+  signaling_key: string;
   restricted_zones: RestrictedZone[];
 };
 
@@ -86,6 +89,9 @@ function cameraErrorMessage(error: unknown) {
 
 export default function CapturePage() {
   const router = useRouter();
+  const [signalingClient] = useState(() =>
+    supabaseUrl && supabaseAnonKey ? createClient() : null,
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sendingFrameRef = useRef(false);
@@ -97,6 +103,8 @@ export default function CapturePage() {
   const [pairing, setPairing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [viewerCount, setViewerCount] = useState(0);
   const [facingMode, setFacingMode] = useState<FacingMode>("environment");
   const [videoAspectRatio, setVideoAspectRatio] = useState("16 / 9");
   const [lastHeartbeat, setLastHeartbeat] = useState<Date | null>(null);
@@ -356,6 +364,7 @@ export default function CapturePage() {
   function stopTracks() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    setMediaStream(null);
     if (videoRef.current) videoRef.current.srcObject = null;
     setStreaming(false);
     setProcessorState("idle");
@@ -398,6 +407,7 @@ export default function CapturePage() {
         },
       });
       streamRef.current = stream;
+      setMediaStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -474,6 +484,13 @@ export default function CapturePage() {
 
   return (
     <main className="capture-page">
+      <WebRtcPublisher
+        client={signalingClient}
+        cameraId={camera?.id ?? null}
+        signalingKey={camera?.signaling_key ?? null}
+        stream={mediaStream}
+        onViewerCount={setViewerCount}
+      />
       <header className="capture-header">
         <div className="capture-brand" aria-label="YELO camera">
           <span className="capture-brand-mark" aria-hidden="true">Y</span>
@@ -656,6 +673,7 @@ export default function CapturePage() {
                 <div><dt>Confirming events</dt><dd>{eventCandidates.length}</dd></div>
                 <div><dt>Events reported</dt><dd>{confirmedEventCount}</dd></div>
                 <div><dt>Dashboard preview</dt><dd>{dashboardPreviewAt ? dashboardPreviewAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</dd></div>
+                <div><dt>Live viewers</dt><dd>{viewerCount}</dd></div>
                 <div><dt>YOLO inference</dt><dd>{inferenceLatency !== null ? `${inferenceLatency} ms` : "Waiting"}</dd></div>
               </dl>
               {eventCandidates.length > 0 && (

@@ -82,9 +82,14 @@ contains the project waste classes before evaluating littering accuracy.
 
 ## Dashboard live preview
 
-The Capture client independently publishes one private JPEG every two seconds
-to the `camera-live-frame` Edge Function. The function overwrites a single
-object per camera in the private `camera-live-frames` bucket, so it provides a
-low-frame-rate dashboard preview without retaining continuous footage. The
-camera detail page refreshes that object and labels previews older than ten
-seconds as stale. Confirmed incident evidence remains stored separately.
+Capture publishes its browser camera stream directly to authenticated dashboard
+viewers through WebRTC. Supabase Realtime Broadcast carries only the
+offer/answer and ICE signaling messages over an unguessable per-camera topic;
+the video itself travels peer-to-peer. Each camera device accepts up to four
+simultaneous viewers.
+
+Capture also publishes one private JPEG every two seconds to the
+`camera-live-frame` Edge Function. The function overwrites a single object per
+camera in the private `camera-live-frames` bucket. This remains the fallback
+when WebRTC is connecting or direct peer connectivity is blocked, without
+retaining continuous footage. Confirmed incident evidence is stored separately.

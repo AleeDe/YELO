@@ -4703,6 +4703,30 @@ h3 {
   object-fit: contain;
 }
 
+.dashboard-webrtc-video {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  width: 100%;
+  height: 100%;
+  background: #102019;
+  object-fit: contain;
+}
+
+.live-preview.has-webrtc .dashboard-webrtc-video {
+  display: block;
+}
+
+.live-preview.has-webrtc > img {
+  visibility: hidden;
+}
+
+.live-preview.has-webrtc .dashboard-live-badge,
+.live-preview.has-webrtc .dashboard-frame-time {
+  z-index: 3;
+}
+
 .dashboard-live-badge,
 .dashboard-frame-time {
   position: absolute;

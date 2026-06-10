@@ -66,7 +66,7 @@ Deno.serve(async (request) => {
   const tokenHash = await sha256(token);
   const { data: camera, error: cameraError } = await adminClient
     .from("cameras")
-    .select("id, society_id, name, location_label, source_type, status, detection_enabled, confirmation_seconds, restricted_zones(id, name, polygon, is_active)")
+    .select("id, society_id, name, location_label, source_type, status, detection_enabled, confirmation_seconds, signaling_key, restricted_zones(id, name, polygon, is_active)")
     .eq("device_token_hash", tokenHash)
     .maybeSingle();
 
@@ -81,7 +81,7 @@ Deno.serve(async (request) => {
     .from("cameras")
     .update({ status: nextStatus, last_seen_at: now })
     .eq("id", camera.id)
-    .select("id, society_id, name, location_label, source_type, status, last_seen_at, detection_enabled, confirmation_seconds")
+    .select("id, society_id, name, location_label, source_type, status, last_seen_at, detection_enabled, confirmation_seconds, signaling_key")
     .single();
 
   if (updateError || !updatedCamera) {
