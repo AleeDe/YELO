@@ -14,6 +14,7 @@ supabase/.temp/
 
 # Local logs and editor files
 *.log
+__pycache__/
+*.py[cod]
 .DS_Store
 Thumbs.db
-

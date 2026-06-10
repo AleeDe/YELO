@@ -1,0 +1,210 @@
+"""Zero-dependency YELO frame ingestion gateway for the local MVP."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import struct
+import time
+import urllib.error
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
+
+
+HOST = os.getenv("YELO_INFERENCE_HOST", "0.0.0.0")
+PORT = int(os.getenv("YELO_INFERENCE_PORT", "8000"))
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+MAX_FRAME_BYTES = 2 * 1024 * 1024
+TOKEN_CACHE_SECONDS = 30
+
+token_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+frame_stats: dict[str, dict[str, Any]] = {}
+
+
+def json_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
+    if len(data) < 4 or data[:2] != b"\xff\xd8":
+        return None
+    offset = 2
+    while offset + 4 <= len(data):
+        if data[offset] != 0xFF:
+            offset += 1
+            continue
+        marker = data[offset + 1]
+        offset += 2
+        if marker in (0xD8, 0xD9):
+            continue
+        if offset + 2 > len(data):
+            return None
+        segment_length = struct.unpack(">H", data[offset : offset + 2])[0]
+        if segment_length < 2 or offset + segment_length > len(data):
+            return None
+        if marker in {
+            0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+            0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
+        }:
+            if segment_length < 7:
+                return None
+            height, width = struct.unpack(">HH", data[offset + 3 : offset + 7])
+            return width, height
+        offset += segment_length
+    return None
+
+
+def validate_camera(token: str, expected_camera_id: str) -> dict[str, Any]:
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_ANON_KEY are required.")
+
+    cache_key = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    cached = token_cache.get(cache_key)
+    now = time.monotonic()
+    if cached and now - cached[0] < TOKEN_CACHE_SECONDS:
+        camera = cached[1]
+    else:
+        request = urllib.request.Request(
+            f"{SUPABASE_URL}/functions/v1/camera-device",
+            data=json_bytes({"action": "heartbeat", "token": token}),
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            if error.code in (401, 403):
+                raise PermissionError("The camera token is invalid or revoked.") from error
+            raise RuntimeError(f"Camera validation failed with HTTP {error.code}.") from error
+        except urllib.error.URLError as error:
+            raise RuntimeError("Supabase camera validation is unavailable.") from error
+        camera = result["camera"]
+        token_cache[cache_key] = (now, camera)
+
+    if camera.get("id") != expected_camera_id:
+        raise PermissionError("The token does not belong to this camera.")
+    return camera
+
+
+def process_frame(camera: dict[str, Any], frame: bytes) -> dict[str, Any]:
+    """YOLO and tracking will replace this metadata-only processing hook."""
+    dimensions = jpeg_dimensions(frame)
+    if not dimensions:
+        raise ValueError("The request body is not a valid JPEG frame.")
+    width, height = dimensions
+    camera_id = str(camera["id"])
+    stats = frame_stats.setdefault(camera_id, {"received": 0})
+    stats.update(
+        {
+            "received": int(stats["received"]) + 1,
+            "last_received_at": time.time(),
+            "width": width,
+            "height": height,
+            "bytes": len(frame),
+        }
+    )
+    return {
+        "accepted": True,
+        "cameraId": camera_id,
+        "frameNumber": stats["received"],
+        "width": width,
+        "height": height,
+        "bytes": len(frame),
+        "detections": [],
+        "modelReady": False,
+    }
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "YELOInference/0.1"
+
+    def end_headers(self) -> None:
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, X-YELO-Camera-Id, X-YELO-Camera-Token, X-YELO-Captured-At",
+        )
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+    def send_json(self, status: int, payload: dict[str, Any]) -> None:
+        body = json_bytes(payload)
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self.end_headers()
+
+    def do_GET(self) -> None:
+        if self.path == "/health":
+            self.send_json(
+                200,
+                {
+                    "status": "ready",
+                    "service": "yelo-inference",
+                    "modelReady": False,
+                    "activeCameras": len(frame_stats),
+                },
+            )
+            return
+        self.send_json(404, {"error": "Not found."})
+
+    def do_POST(self) -> None:
+        if self.path != "/frames":
+            self.send_json(404, {"error": "Not found."})
+            return
+        if self.headers.get_content_type() != "image/jpeg":
+            self.send_json(415, {"error": "Send frames as image/jpeg."})
+            return
+
+        camera_id = self.headers.get("X-YELO-Camera-Id", "").strip()
+        token = self.headers.get("X-YELO-Camera-Token", "").strip()
+        if not camera_id or not token:
+            self.send_json(401, {"error": "Camera ID and token are required."})
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self.send_json(400, {"error": "Invalid Content-Length."})
+            return
+        if content_length <= 0 or content_length > MAX_FRAME_BYTES:
+            self.send_json(413, {"error": "Frame must be between 1 byte and 2 MB."})
+            return
+
+        frame = self.rfile.read(content_length)
+        try:
+            camera = validate_camera(token, camera_id)
+            result = process_frame(camera, frame)
+        except PermissionError as error:
+            self.send_json(401, {"error": str(error)})
+            return
+        except ValueError as error:
+            self.send_json(400, {"error": str(error)})
+            return
+        except RuntimeError as error:
+            self.send_json(503, {"error": str(error)})
+            return
+
+        self.send_json(202, result)
+
+    def log_message(self, message: str, *args: object) -> None:
+        print(f"[{self.log_date_time_string()}] {message % args}")
+
+
+if __name__ == "__main__":
+    print(f"YELO inference gateway listening on http://{HOST}:{PORT}")
+    print("Frames are validated and processed in memory; continuous video is not stored.")
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

@@ -1,0 +1,32 @@
+# Week 3 Backlog
+
+## Frame Ingestion
+
+- [x] Define a common JPEG frame contract
+- [x] Add local camera-token validation
+- [x] Send compressed mobile and webcam frames once per second
+- [x] Show frame delivery and gateway health in Capture
+- [x] Avoid continuous-frame storage
+- [ ] Add YOLO model loading and object detections
+- [ ] Add object tracking
+
+## Restricted Zones
+
+- [ ] Draw a polygon over a captured camera frame
+- [ ] Save normalized polygon coordinates per camera
+- [ ] Validate at least three polygon points
+- [ ] Overlay the active zone during local processing
+
+## Event Pipeline
+
+- [ ] Define person and waste-object association rules
+- [ ] Add littering confirmation timer
+- [ ] Upload incident evidence only
+- [ ] Insert detection event and media records
+- [ ] Publish realtime dashboard notifications
+
+## Demo Target
+
+One mobile camera and one webcam can send sampled frames to the local laptop.
+The local service validates each camera, processes frames in memory, and reports
+delivery health before YOLO and event generation are enabled.

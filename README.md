@@ -21,3 +21,10 @@ npm run dev
 
 The interface standard is documented in
 [`docs/HCI_UI_STANDARD.md`](docs/HCI_UI_STANDARD.md).
+
+## Local Frame Ingestion
+
+The zero-cost Python frame gateway lives in
+[`services/inference`](services/inference). It accepts sampled JPEG frames from
+mobile and webcam Capture clients and provides the hook for YOLO processing.
+See its README for local and phone-on-Wi-Fi setup.

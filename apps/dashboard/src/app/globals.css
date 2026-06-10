@@ -4927,6 +4927,26 @@ h3 {
   box-shadow: 0 0 0 4px rgba(11, 154, 112, 0.12);
 }
 
+.processor-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #8b9791;
+}
+
+.processor-dot.sending {
+  background: #d28b13;
+}
+
+.processor-dot.connected {
+  background: #0b9a70;
+  box-shadow: 0 0 0 4px rgba(11, 154, 112, 0.12);
+}
+
+.processor-dot.error {
+  background: var(--danger);
+}
+
 .capture-context-nav {
   max-width: 1440px;
   margin: 0 auto;
@@ -5199,6 +5219,66 @@ h3 {
 .capture-heartbeat-note {
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.capture-processor-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  padding: 11px;
+  color: var(--text-muted);
+}
+
+.capture-processor-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.capture-processor-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.capture-processor-note.connected {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.capture-processor-note.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.capture-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+
+.capture-advanced summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.capture-advanced[open] summary {
+  margin-bottom: 8px;
+}
+
+.capture-advanced .form-field {
+  margin-top: 0;
+}
+
+.capture-advanced .form-field input {
+  font-family: inherit;
+  font-size: 13px;
 }
 
 .capture-device-card dl {

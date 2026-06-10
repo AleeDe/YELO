@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   AlertCircle,
   ArrowLeft,
   Camera,
@@ -14,7 +15,11 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
+import {
+  inferenceUrl,
+  supabaseAnonKey,
+  supabaseUrl,
+} from "@/lib/supabase/config";
 
 type CameraInfo = {
   id: string;
@@ -28,8 +33,10 @@ type CameraInfo = {
 
 type DeviceAction = "pair" | "heartbeat" | "disconnect";
 type FacingMode = "user" | "environment";
+type ProcessorState = "idle" | "sending" | "connected" | "error";
 
 const tokenStorageKey = "yelo-camera-device-token";
+const processorUrlStorageKey = "yelo-inference-url";
 
 function cameraErrorMessage(error: unknown) {
   if (error instanceof DOMException) {
@@ -50,6 +57,7 @@ export default function CapturePage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const sendingFrameRef = useRef(false);
   const returnPathRef = useRef("/cameras");
   const [token, setToken] = useState("");
   const [camera, setCamera] = useState<CameraInfo | null>(null);
@@ -58,11 +66,21 @@ export default function CapturePage() {
   const [streaming, setStreaming] = useState(false);
   const [facingMode, setFacingMode] = useState<FacingMode>("environment");
   const [lastHeartbeat, setLastHeartbeat] = useState<Date | null>(null);
+  const [processorState, setProcessorState] = useState<ProcessorState>("idle");
+  const [processorUrl, setProcessorUrl] = useState(inferenceUrl);
+  const [framesSent, setFramesSent] = useState(0);
+  const [processorLatency, setProcessorLatency] = useState<number | null>(null);
+  const [processorMessage, setProcessorMessage] = useState(
+    "Starts when the camera preview is running.",
+  );
   const [error, setError] = useState("");
 
   useEffect(() => {
     const restoreToken = window.setTimeout(() => {
       setToken(window.sessionStorage.getItem(tokenStorageKey) ?? "");
+      setProcessorUrl(
+        window.localStorage.getItem(processorUrlStorageKey) ?? inferenceUrl,
+      );
       const requestedPath = new URLSearchParams(window.location.search).get("returnTo");
       if (requestedPath?.startsWith("/") && !requestedPath.startsWith("//")) {
         returnPathRef.current = requestedPath;
@@ -111,11 +129,91 @@ export default function CapturePage() {
     }
   }, [callDevice, token]);
 
+  const sendFrame = useCallback(async () => {
+    const video = videoRef.current;
+    if (
+      !camera ||
+      !token ||
+      !video ||
+      video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+      sendingFrameRef.current
+    ) {
+      return;
+    }
+
+    sendingFrameRef.current = true;
+    setProcessorState("sending");
+    const startedAt = performance.now();
+    try {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+      if (!sourceWidth || !sourceHeight) return;
+      const width = Math.min(sourceWidth, 960);
+      const height = Math.round((sourceHeight / sourceWidth) * width);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) throw new Error("This device could not prepare a camera frame.");
+      context.drawImage(video, 0, 0, width, height);
+      const frame = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.72),
+      );
+      if (!frame) throw new Error("This device could not encode a camera frame.");
+
+      const response = await fetch(`${processorUrl.replace(/\/$/, "")}/frames`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "image/jpeg",
+          "X-YELO-Camera-Id": camera.id,
+          "X-YELO-Camera-Token": token,
+          "X-YELO-Captured-At": new Date().toISOString(),
+        },
+        body: frame,
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(result?.error ?? `Inference gateway returned HTTP ${response.status}.`);
+      }
+
+      const frameNumber = Number(result?.frameNumber);
+      if (Number.isFinite(frameNumber) && frameNumber > 0) {
+        setFramesSent(frameNumber);
+      } else {
+        setFramesSent((current) => current + 1);
+      }
+      setProcessorLatency(Math.round(performance.now() - startedAt));
+      setProcessorState("connected");
+      setProcessorMessage(
+        result?.modelReady
+          ? "Frames are reaching the detection model."
+          : "Frames are reaching the local gateway. YOLO is not loaded yet.",
+      );
+    } catch (frameError) {
+      setProcessorState("error");
+      setProcessorMessage(
+        frameError instanceof TypeError
+          ? `Local processor not reachable at ${processorUrl}. Start the YELO inference gateway and check the device network.`
+          : frameError instanceof Error
+            ? frameError.message
+            : "The local inference gateway is unavailable.",
+      );
+    } finally {
+      sendingFrameRef.current = false;
+    }
+  }, [camera, processorUrl, token]);
+
   useEffect(() => {
     if (!streaming || !token) return;
     const interval = window.setInterval(() => void sendHeartbeat(), 25_000);
     return () => window.clearInterval(interval);
   }, [sendHeartbeat, streaming, token]);
+
+  useEffect(() => {
+    if (!streaming || !camera || !token) return;
+    const interval = window.setInterval(() => void sendFrame(), 1_000);
+    return () => window.clearInterval(interval);
+  }, [camera, sendFrame, streaming, token]);
 
   async function pairDevice(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -129,6 +227,8 @@ export default function CapturePage() {
       setToken(cleanToken);
       setCamera(pairedCamera);
       setLastHeartbeat(new Date());
+      setFramesSent(0);
+      setProcessorLatency(null);
     } catch (pairError) {
       setCamera(null);
       window.sessionStorage.removeItem(tokenStorageKey);
@@ -143,6 +243,8 @@ export default function CapturePage() {
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setStreaming(false);
+    setProcessorState("idle");
+    setProcessorMessage("Starts when the camera preview is running.");
   }
 
   async function stopPreview() {
@@ -185,6 +287,7 @@ export default function CapturePage() {
       setFacingMode(nextFacingMode);
       setStreaming(true);
       void sendHeartbeat();
+      void sendFrame();
     } catch (mediaError) {
       setError(cameraErrorMessage(mediaError));
     } finally {
@@ -209,6 +312,8 @@ export default function CapturePage() {
       setCamera(null);
       setToken("");
       setLastHeartbeat(null);
+      setFramesSent(0);
+      setProcessorLatency(null);
     }
   }
 
@@ -216,6 +321,13 @@ export default function CapturePage() {
     stopTracks();
     if (camera && token) void callDevice("disconnect", token).catch(() => undefined);
     router.push(returnPathRef.current);
+  }
+
+  function updateProcessorUrl(value: string) {
+    setProcessorUrl(value);
+    window.localStorage.setItem(processorUrlStorageKey, value);
+    setProcessorState("idle");
+    setProcessorMessage("Starts when the camera preview is running.");
   }
 
   return (
@@ -315,6 +427,20 @@ export default function CapturePage() {
                 {pairing ? "Verifying..." : "Connect camera"}
               </button>
               <small className="capture-privacy-note">The raw token is never stored in the YELO database.</small>
+              <details className="capture-advanced">
+                <summary className="focus-ring">Local processor settings</summary>
+                <label className="form-field">
+                  <span>Processor URL</span>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    value={processorUrl}
+                    onChange={(event) => updateProcessorUrl(event.target.value)}
+                    placeholder="http://192.168.1.3:8000"
+                  />
+                  <small>On a phone, use the laptop&apos;s Wi-Fi IP address, not 127.0.0.1.</small>
+                </label>
+              </details>
             </form>
           ) : (
             <div className="capture-device-card">
@@ -326,8 +452,27 @@ export default function CapturePage() {
                 <div><dt>Source</dt><dd>{camera.source_type.replaceAll("_", " ")}</dd></div>
                 <div><dt>Heartbeat</dt><dd>{lastHeartbeat ? lastHeartbeat.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</dd></div>
                 <div><dt>Detection</dt><dd>{camera.detection_enabled ? "Enabled" : "Paused"}</dd></div>
+                <div><dt>Processor</dt><dd><span className={`processor-dot ${processorState}`} /> {processorState === "connected" ? "Receiving" : processorState === "error" ? "Unavailable" : processorState === "sending" ? "Sending" : "Waiting"}</dd></div>
+                <div><dt>Frames sent</dt><dd>{framesSent}{processorLatency !== null ? ` · ${processorLatency} ms` : ""}</dd></div>
               </dl>
-              <p className="capture-heartbeat-note">YELO reports this device online every 25 seconds while the preview is running.</p>
+              <div className={`capture-processor-note ${processorState}`}>
+                <Activity size={17} />
+                <p>{processorMessage}</p>
+              </div>
+              <details className="capture-advanced">
+                <summary className="focus-ring">Processor connection</summary>
+                <label className="form-field">
+                  <span>Processor URL</span>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    value={processorUrl}
+                    onChange={(event) => updateProcessorUrl(event.target.value)}
+                  />
+                  <small>Use the laptop&apos;s LAN IP when this camera runs on a phone.</small>
+                </label>
+              </details>
+              <p className="capture-heartbeat-note">Device status updates every 25 seconds. Sampled frames are sent locally once per second and are not stored by this client.</p>
               <button className="capture-disconnect-button focus-ring" type="button" onClick={() => void disconnect()}>
                 <Unplug size={18} /> Disconnect device
               </button>
