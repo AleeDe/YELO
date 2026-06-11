@@ -21,7 +21,9 @@ PORT = int(os.getenv("YELO_INFERENCE_PORT", "8000"))
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 MAX_FRAME_BYTES = 2 * 1024 * 1024
-TOKEN_CACHE_SECONDS = 30
+# Camera config (zones, confirmation delay) refreshes when this expires, so
+# keep it short enough that restricted-zone edits reach detection quickly.
+TOKEN_CACHE_SECONDS = int(os.getenv("YELO_TOKEN_CACHE_SECONDS", "10"))
 MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26m.pt")
 MODEL_DEVICE = os.getenv("YELO_MODEL_DEVICE", "cpu")
 MODEL_CONFIDENCE = float(os.getenv("YELO_MODEL_CONFIDENCE", "0.2"))
