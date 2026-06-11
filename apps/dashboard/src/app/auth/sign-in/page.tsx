@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Camera, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, Camera, ExternalLink, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { destinationForRole, useAuth } from "@/components/auth-provider";
 import { resolveUserAccess } from "@/lib/supabase/access";
+
+const SHIFTDEPLOY_URL = "https://shiftdeploy.com";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -64,6 +66,10 @@ export default function SignInPage() {
 
   return (
     <main className="auth-layout">
+      <header className="auth-mobile-brand">
+        <span aria-hidden="true">Y</span>
+        <div><strong>YELO</strong><small>Clean spaces, clearly managed</small></div>
+      </header>
       <section className="auth-brand-panel">
         <Link href="/" className="auth-brand"><span>Y</span><strong>YELO</strong></Link>
         <div>
@@ -71,11 +77,16 @@ export default function SignInPage() {
           <h1>Cleaner spaces start with timely review.</h1>
           <p>Monitor cameras, review possible littering incidents, and coordinate society response from one workspace.</p>
         </div>
-        <ul>
-          <li><ShieldCheck size={19} /> Society data remains isolated by role.</li>
-          <li><ShieldCheck size={19} /> AI suggestions always require human review.</li>
-          <li><ShieldCheck size={19} /> Continuous raw video is not stored by default.</li>
-        </ul>
+        <div className="auth-brand-footer">
+          <ul>
+            <li><ShieldCheck size={19} /> Society data remains isolated by role.</li>
+            <li><ShieldCheck size={19} /> AI suggestions always require human review.</li>
+            <li><ShieldCheck size={19} /> Continuous raw video is not stored by default.</li>
+          </ul>
+          <a className="auth-powered focus-ring" href={SHIFTDEPLOY_URL} target="_blank" rel="noopener noreferrer">
+            Powered by <strong>ShiftDeploy</strong> <ExternalLink size={14} aria-hidden="true" />
+          </a>
+        </div>
       </section>
 
       <section className="auth-form-panel">
@@ -109,6 +120,11 @@ export default function SignInPage() {
             <span><strong>Use this device as a camera</strong><small>Pair with a one-time camera token</small></span>
             <ArrowRight size={18} />
           </Link>
+          <div className="auth-card-footer">
+            <Link href="/legal" className="focus-ring">Privacy &amp; Terms</Link>
+            <span aria-hidden="true">·</span>
+            <a href={SHIFTDEPLOY_URL} target="_blank" rel="noopener noreferrer" className="focus-ring">Powered by ShiftDeploy</a>
+          </div>
         </div>
       </section>
     </main>
