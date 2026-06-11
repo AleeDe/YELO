@@ -409,6 +409,13 @@ verify_jwt = false
 [functions.camera-live-frame]
 verify_jwt = false
 
+# Authenticates with the hashed camera device token, like report-camera-event.
+[functions.attach-event-clip]
+verify_jwt = false
+
+[functions.rotate-camera-token]
+verify_jwt = true
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

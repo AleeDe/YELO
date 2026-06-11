@@ -418,7 +418,16 @@ def capture_event_clip(
             json.loads(response.read().decode("utf-8"))
             stats["last_clip_status"] = "uploaded"
             print(f"Uploaded {len(frames)}-frame evidence clip ({len(data)} bytes).")
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as error:
+    except urllib.error.HTTPError as error:
+        detail = ""
+        try:
+            detail = error.read().decode("utf-8")[:300]
+        except OSError:
+            pass
+        stats["last_clip_status"] = "failed"
+        stats["last_clip_error"] = f"{error} {detail}".strip()
+        print(f"Evidence clip upload failed: {error} {detail}")
+    except (urllib.error.URLError, TimeoutError) as error:
         stats["last_clip_status"] = "failed"
         stats["last_clip_error"] = str(error)
         print(f"Evidence clip upload failed: {error}")
@@ -922,6 +931,7 @@ class Handler(BaseHTTPRequestHandler):
                                 "last_clip_status",
                                 "none",
                             ),
+                            "lastClipError": stats.get("last_clip_error"),
                             "lastReportEventId": stats.get(
                                 "last_report_event_id",
                             ),
