@@ -97,12 +97,13 @@ EVENT_COOLDOWN_SECONDS = int(os.getenv("YELO_EVENT_COOLDOWN_SECONDS", "120"))
 CLIP_ENABLED = os.getenv("YELO_CLIP_ENABLED", "1") not in {"0", "false", "no"}
 CLIP_PRE_SECONDS = float(os.getenv("YELO_CLIP_PRE_SECONDS", "60"))
 CLIP_POST_SECONDS = float(os.getenv("YELO_CLIP_POST_SECONDS", "60"))
-# Output container frame rate; source frames are duplicated to play in real time.
-CLIP_OUTPUT_FPS = float(os.getenv("YELO_CLIP_OUTPUT_FPS", "15"))
+# Output container frame rate; source frames are held to play in real time.
+# Kept modest so a two-minute clip stays well under the upload limit.
+CLIP_OUTPUT_FPS = float(os.getenv("YELO_CLIP_OUTPUT_FPS", "8"))
 # Approximate rate frames actually arrive, used to hold the final frame.
 CLIP_SOURCE_FPS = float(os.getenv("YELO_CLIP_SOURCE_FPS", "0.7"))
 CLIP_WIDTH = int(os.getenv("YELO_CLIP_WIDTH", "640"))
-CLIP_MAX_UPLOAD_BYTES = int(os.getenv("YELO_CLIP_MAX_UPLOAD_BYTES", str(14 * 1024 * 1024)))
+CLIP_MAX_UPLOAD_BYTES = int(os.getenv("YELO_CLIP_MAX_UPLOAD_BYTES", str(22 * 1024 * 1024)))
 CLIP_REPORT_URL = os.getenv(
     "YELO_CLIP_REPORT_URL",
     f"{SUPABASE_URL}/functions/v1/attach-event-clip" if SUPABASE_URL else "",
@@ -455,9 +456,14 @@ def capture_event_clip(
         stats["last_clip_status"] = "skipped_no_frames"
         return
     data, extension, content_type = clip
+    stats["last_clip_bytes"] = len(data)
+    print(
+        f"Event clip encoded: {len(samples)} source frames, "
+        f"{len(data)} bytes, {extension}."
+    )
     if len(data) > CLIP_MAX_UPLOAD_BYTES:
         stats["last_clip_status"] = "skipped_too_large"
-        print(f"Event clip skipped: {len(data)} bytes exceeds the upload limit.")
+        print(f"Event clip skipped: {len(data)} bytes exceeds the {CLIP_MAX_UPLOAD_BYTES} limit.")
         return
     payload = {
         "token": token,
@@ -995,6 +1001,7 @@ class Handler(BaseHTTPRequestHandler):
                                 "last_clip_status",
                                 "none",
                             ),
+                            "lastClipBytes": stats.get("last_clip_bytes"),
                             "lastClipError": stats.get("last_clip_error"),
                             "lastReportEventId": stats.get(
                                 "last_report_event_id",

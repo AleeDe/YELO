@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
 };
 
-const MAX_CLIP_BYTES = 15 * 1024 * 1024;
+const MAX_CLIP_BYTES = 25 * 1024 * 1024;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -90,7 +90,7 @@ Deno.serve(async (request) => {
     return json({ error: "The clip is not valid base64." }, 400);
   }
   if (clip.byteLength < 1024 || clip.byteLength > MAX_CLIP_BYTES) {
-    return json({ error: "Clips must be between 1 KB and 15 MB." }, 413);
+    return json({ error: "Clips must be between 1 KB and 25 MB." }, 413);
   }
 
   const admin = createClient(supabaseUrl, secretKey, {
