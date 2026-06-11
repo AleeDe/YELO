@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Camera, Check, Clock3, LoaderCircle, MapPin, RotateCcw, ShieldAlert, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Camera, Check, CheckCircle2, Clock3, LoaderCircle, MapPin, RotateCcw, ShieldAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
@@ -26,6 +26,7 @@ export default function IncidentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     if (!auth.client || !auth.user) return;
@@ -57,12 +58,18 @@ export default function IncidentDetailPage() {
   async function setStatus(status: "confirmed" | "false_positive" | "under_review") {
     if (!auth.client || !auth.user || !incident) return;
     setSaving(true);
+    setFeedback(null);
     const { error } = await auth.client.from("detection_events").update({
       status,
       reviewed_by: auth.user.id,
       reviewed_at: new Date().toISOString(),
     }).eq("id", incident.id);
-    if (!error) setIncident({ ...incident, status });
+    if (error) {
+      setFeedback({ type: "error", message: `Could not save the decision: ${error.message}. Please try again.` });
+    } else {
+      setIncident({ ...incident, status });
+      setFeedback({ type: "success", message: `Outcome recorded: ${labels[status] ?? status}.` });
+    }
     setSaving(false);
   }
 
@@ -97,10 +104,17 @@ export default function IncidentDetailPage() {
             <div><dt><ShieldAlert size={16} /> Zone</dt><dd>{incident.restricted_zones?.[0]?.name ?? "No zone"}</dd></div>
             <div><dt>AI confidence</dt><dd>{Math.round(Number(incident.confidence) * 100)}%</dd></div>
           </dl><div className="ai-note"><ShieldAlert size={19} /><p>This is an AI suggestion, not proof. Inspect available evidence before deciding.</p></div></section>
-          <section className="panel decision-card"><div><p className="eyebrow">Record outcome</p><h2>Review decision</h2></div><div className="decision-actions">
-            <button disabled={saving} onClick={() => void setStatus("confirmed")} className="decision-button confirm focus-ring"><Check size={20} /><span><strong>Confirm incident</strong><small>Evidence supports littering</small></span></button>
-            <button disabled={saving} onClick={() => void setStatus("false_positive")} className="decision-button reject focus-ring"><X size={20} /><span><strong>Mark false alert</strong><small>No actionable incident</small></span></button>
-            <button disabled={saving} onClick={() => void setStatus("under_review")} className="decision-button neutral focus-ring"><RotateCcw size={20} /><span><strong>Keep under review</strong><small>More context is required</small></span></button>
+          <section className="panel decision-card"><div><p className="eyebrow">Record outcome</p><h2>Review decision</h2></div>
+            {feedback && (
+              <div className={`page-feedback ${feedback.type}`} role="status" aria-live="polite">
+                {feedback.type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                <p>{feedback.message}</p>
+              </div>
+            )}
+            <div className="decision-actions">
+            <button disabled={saving} aria-pressed={incident.status === "confirmed"} onClick={() => void setStatus("confirmed")} className={`decision-button confirm focus-ring ${incident.status === "confirmed" ? "active" : ""}`}>{saving ? <LoaderCircle className="spin" size={20} /> : <Check size={20} />}<span><strong>Confirm incident</strong><small>Evidence supports littering</small></span></button>
+            <button disabled={saving} aria-pressed={incident.status === "false_positive"} onClick={() => void setStatus("false_positive")} className={`decision-button reject focus-ring ${incident.status === "false_positive" ? "active" : ""}`}><X size={20} /><span><strong>Mark false alert</strong><small>No actionable incident</small></span></button>
+            <button disabled={saving} aria-pressed={incident.status === "under_review"} onClick={() => void setStatus("under_review")} className={`decision-button neutral focus-ring ${incident.status === "under_review" ? "active" : ""}`}><RotateCcw size={20} /><span><strong>Keep under review</strong><small>More context is required</small></span></button>
           </div></section>
         </aside>
       </div>
