@@ -24,7 +24,8 @@ MAX_FRAME_BYTES = 2 * 1024 * 1024
 # Camera config (zones, confirmation delay) refreshes when this expires, so
 # keep it short enough that restricted-zone edits reach detection quickly.
 TOKEN_CACHE_SECONDS = int(os.getenv("YELO_TOKEN_CACHE_SECONDS", "10"))
-MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26l.pt")
+# Medium is the best accuracy/latency balance on CPU; large lags at ~1 fps.
+MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26m.pt")
 # Weights live at the repository root; resolve them regardless of the
 # directory the gateway is launched from.
 if not os.path.isabs(MODEL_PATH) and not os.path.exists(MODEL_PATH):

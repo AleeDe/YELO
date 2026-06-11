@@ -1760,6 +1760,77 @@ h3 {
   font-size: 12.5px;
 }
 
+/* Zoomable evidence viewer */
+.zoom-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+}
+
+.zoom-frame-content {
+  display: block;
+  width: 100%;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.zoom-frame-content > * {
+  display: block;
+}
+
+.zoom-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 12px;
+  background: rgb(10 26 20 / 74%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.zoom-toolbar button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.zoom-toolbar button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 14%);
+}
+
+.zoom-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.zoom-toolbar span {
+  padding: 0 9px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .zoom-toolbar button {
+    width: 40px;
+    height: 40px;
+  }
+}
+
 .timeline-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, Camera, Check, CheckCircle2, Clock3, LoaderCirc
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
+import { ZoomableMedia } from "@/components/zoomable-media";
 
 type CameraInfo = { name: string; location_label: string | null };
 type ZoneInfo = { name: string };
@@ -103,26 +104,30 @@ export default function IncidentDetailPage() {
           <div className="panel-heading"><div><p className="eyebrow">Captured evidence</p><h2>{clipUrl ? "Event clip and detection frame" : "Detection frame"}</h2></div><span className="evidence-time"><Clock3 size={16} /> {new Date(incident.detected_at).toLocaleString()}</span></div>
           {clipUrl && (
             <div className="evidence-clip">
-              <video
-                controls
-                playsInline
-                preload="metadata"
-                poster={evidenceUrl || undefined}
-                src={clipUrl}
-                aria-label={`Before and after clip for ${incident.object_class}`}
-              />
-              <p className="evidence-clip-note">Covers about one minute before and after the detection, so the person involved is visible.</p>
+              <ZoomableMedia label="Evidence clip" controlsSafeArea={56}>
+                <video
+                  controls
+                  playsInline
+                  preload="metadata"
+                  poster={evidenceUrl || undefined}
+                  src={clipUrl}
+                  aria-label={`Before and after clip for ${incident.object_class}`}
+                />
+              </ZoomableMedia>
+              <p className="evidence-clip-note">Covers about one minute before and after the detection, so the person involved is visible. Zoom in to identify details.</p>
             </div>
           )}
           {evidenceUrl ? (
             <div className="large-evidence has-image">
-              <Image
-                unoptimized
-                width={1280}
-                height={720}
-                src={evidenceUrl}
-                alt={`Evidence captured for ${incident.object_class}`}
-              />
+              <ZoomableMedia label="Evidence image">
+                <Image
+                  unoptimized
+                  width={1280}
+                  height={720}
+                  src={evidenceUrl}
+                  alt={`Evidence captured for ${incident.object_class}`}
+                />
+              </ZoomableMedia>
             </div>
           ) : !clipUrl ? (
             <div className="large-evidence"><Camera size={42} /><p>No evidence media has been uploaded for this event.</p></div>
