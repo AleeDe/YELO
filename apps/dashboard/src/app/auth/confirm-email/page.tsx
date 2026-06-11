@@ -15,6 +15,8 @@ export default function ConfirmEmailPage() {
   const [confirmationType, setConfirmationType] = useState<ConfirmationType | null>(null);
   const [error, setError] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [policiesAccepted, setPoliciesAccepted] = useState(false);
+  const consentRequired = confirmationType === "invite";
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -100,10 +102,25 @@ export default function ConfirmEmailPage() {
                 <p>Each new request invalidates earlier recovery emails.</p>
               </div>
             </div>
+            {consentRequired && (
+              <label className="policy-consent">
+                <input
+                  type="checkbox"
+                  checked={policiesAccepted}
+                  onChange={(event) => setPoliciesAccepted(event.target.checked)}
+                />
+                <span>
+                  I have read and agree to the YELO{" "}
+                  <Link href="/legal#terms" target="_blank" rel="noopener">Terms &amp; Conditions</Link>{" "}
+                  and{" "}
+                  <Link href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</Link>.
+                </span>
+              </label>
+            )}
             <button
               className="auth-submit focus-ring"
               type="button"
-              disabled={!tokenHash || verifying}
+              disabled={!tokenHash || verifying || (consentRequired && !policiesAccepted)}
               onClick={() => void continueSecurely()}
             >
               {verifying ? (
