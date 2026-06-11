@@ -15,7 +15,7 @@ type IncidentDetail = {
   detected_at: string;
   cameras: { name: string; location_label: string }[];
   restricted_zones: { name: string }[];
-  event_media: { storage_path: string; captured_at: string }[];
+  event_media: { storage_path: string; captured_at: string; media_type: string | null }[];
 };
 
 const labels: Record<string, string> = { new: "Needs review", under_review: "Under review", confirmed: "Confirmed", false_positive: "False alert", resolved: "Resolved" };
@@ -26,6 +26,7 @@ export default function IncidentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [clipUrl, setClipUrl] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
@@ -38,17 +39,25 @@ export default function IncidentDetailPage() {
       }
       const { data } = await auth.client!
         .from("detection_events")
-        .select("id, object_class, confidence, status, detected_at, cameras(name, location_label), restricted_zones(name), event_media(storage_path, captured_at)")
+        .select("id, object_class, confidence, status, detected_at, cameras(name, location_label), restricted_zones(name), event_media(storage_path, captured_at, media_type)")
         .eq("id", id)
         .maybeSingle();
       const loaded = data as IncidentDetail | null;
       setIncident(loaded);
-      const media = loaded?.event_media?.[0];
-      if (media) {
+      const media = loaded?.event_media ?? [];
+      const image = media.find((item) => item.media_type !== "video");
+      const video = media.find((item) => item.media_type === "video");
+      if (image) {
         const { data: signed } = await auth.client!.storage
           .from("event-evidence")
-          .createSignedUrl(media.storage_path, 300);
+          .createSignedUrl(image.storage_path, 300);
         setEvidenceUrl(signed?.signedUrl ?? "");
+      }
+      if (video) {
+        const { data: signed } = await auth.client!.storage
+          .from("event-evidence")
+          .createSignedUrl(video.storage_path, 600);
+        setClipUrl(signed?.signedUrl ?? "");
       }
       setLoading(false);
     }, 0);
@@ -82,7 +91,20 @@ export default function IncidentDetailPage() {
       <div className="detail-heading"><div><p className="eyebrow">Incident {incident.id.slice(0, 8)}</p><h1>{incident.object_class}</h1><p className="page-subtitle">Review the event evidence before recording an outcome.</p></div><StatusPill status={labels[incident.status] ?? incident.status} /></div>
       <div className="review-layout">
         <section className="panel evidence-panel">
-          <div className="panel-heading"><div><p className="eyebrow">Captured evidence</p><h2>Detection frame</h2></div><span className="evidence-time"><Clock3 size={16} /> {new Date(incident.detected_at).toLocaleString()}</span></div>
+          <div className="panel-heading"><div><p className="eyebrow">Captured evidence</p><h2>{clipUrl ? "Event clip and detection frame" : "Detection frame"}</h2></div><span className="evidence-time"><Clock3 size={16} /> {new Date(incident.detected_at).toLocaleString()}</span></div>
+          {clipUrl && (
+            <div className="evidence-clip">
+              <video
+                controls
+                playsInline
+                preload="metadata"
+                poster={evidenceUrl || undefined}
+                src={clipUrl}
+                aria-label={`Before and after clip for ${incident.object_class}`}
+              />
+              <p className="evidence-clip-note">Covers about one minute before and after the detection, so the person involved is visible.</p>
+            </div>
+          )}
           {evidenceUrl ? (
             <div className="large-evidence has-image">
               <Image
@@ -93,9 +115,9 @@ export default function IncidentDetailPage() {
                 alt={`Evidence captured for ${incident.object_class}`}
               />
             </div>
-          ) : (
+          ) : !clipUrl ? (
             <div className="large-evidence"><Camera size={42} /><p>No evidence media has been uploaded for this event.</p></div>
-          )}
+          ) : null}
         </section>
         <aside className="review-sidebar">
           <section className="panel detail-card"><h2>Event details</h2><dl className="detail-list">

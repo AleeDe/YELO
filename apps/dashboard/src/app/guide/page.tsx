@@ -50,8 +50,8 @@ const steps = [
   {
     icon: Bell,
     title: "5. Get notified",
-    body: "Confirmed possible events appear instantly in the Notifications panel and in the Incidents list, together with one evidence image, the camera, zone, time, and AI confidence.",
-    note: "Continuous video is never stored — only the single evidence frame of a confirmed event.",
+    body: "Confirmed possible events appear instantly in the Notifications panel and in the Incidents list, together with an evidence image, a short before-and-after clip showing who was involved, the camera, zone, time, and AI confidence.",
+    note: "Continuous video is never stored — only the evidence frame and a roughly two-minute clip around a confirmed event.",
   },
   {
     icon: ClipboardCheck,

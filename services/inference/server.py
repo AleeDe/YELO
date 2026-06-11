@@ -44,6 +44,16 @@ EVENT_CANDIDATE_GRACE_SECONDS = float(
     os.getenv("YELO_EVENT_CANDIDATE_GRACE_SECONDS", "12")
 )
 EVENT_COOLDOWN_SECONDS = int(os.getenv("YELO_EVENT_COOLDOWN_SECONDS", "120"))
+CLIP_ENABLED = os.getenv("YELO_CLIP_ENABLED", "1") not in {"0", "false", "no"}
+CLIP_PRE_SECONDS = float(os.getenv("YELO_CLIP_PRE_SECONDS", "60"))
+CLIP_POST_SECONDS = float(os.getenv("YELO_CLIP_POST_SECONDS", "60"))
+CLIP_PLAYBACK_FPS = float(os.getenv("YELO_CLIP_PLAYBACK_FPS", "4"))
+CLIP_WIDTH = int(os.getenv("YELO_CLIP_WIDTH", "640"))
+CLIP_MAX_UPLOAD_BYTES = int(os.getenv("YELO_CLIP_MAX_UPLOAD_BYTES", str(14 * 1024 * 1024)))
+CLIP_REPORT_URL = os.getenv(
+    "YELO_CLIP_REPORT_URL",
+    f"{SUPABASE_URL}/functions/v1/attach-event-clip" if SUPABASE_URL else "",
+)
 WASTE_CLASSES = {
     value.strip().lower()
     for value in os.getenv(
@@ -69,6 +79,10 @@ track_history: dict[str, dict[int, list[tuple[float, float]]]] = {}
 event_candidates: dict[str, dict[str, dict[str, Any]]] = {}
 event_cooldowns: dict[str, float] = {}
 recent_people: dict[str, dict[int, dict[str, Any]]] = {}
+# Rolling per-camera frame history used to assemble before/after evidence
+# clips. Frames live only in memory and age out unless an event confirms.
+frame_buffers: dict[str, list[tuple[float, bytes]]] = {}
+frame_buffer_lock = threading.Lock()
 
 
 def normalized_polygon(value: Any) -> list[tuple[float, float]]:
@@ -274,6 +288,142 @@ def start_event_report(
     threading.Thread(
         target=report_confirmed_event,
         args=(camera, token, frame, event),
+        daemon=True,
+    ).start()
+
+
+def remember_frame(camera_id: str, frame: bytes) -> None:
+    """Keep a short rolling window of frames for before/after evidence clips."""
+    if not CLIP_ENABLED:
+        return
+    horizon = time.time() - (CLIP_PRE_SECONDS + CLIP_POST_SECONDS + 20)
+    with frame_buffer_lock:
+        buffer = frame_buffers.setdefault(camera_id, [])
+        buffer.append((time.time(), frame))
+        while buffer and buffer[0][0] < horizon:
+            buffer.pop(0)
+
+
+def encode_clip(frames: list[bytes]) -> tuple[bytes, str, str] | None:
+    """Stitch JPEG frames into a browser-playable video (H.264, then VP8)."""
+    import cv2
+    import numpy
+
+    decoded = []
+    for frame in frames:
+        image = cv2.imdecode(numpy.frombuffer(frame, dtype=numpy.uint8), cv2.IMREAD_COLOR)
+        if image is None:
+            continue
+        height = int(round(image.shape[0] * (CLIP_WIDTH / image.shape[1])))
+        decoded.append(cv2.resize(image, (CLIP_WIDTH, height)))
+    if len(decoded) < 4:
+        return None
+    height = decoded[0].shape[0]
+    decoded = [
+        image if image.shape[0] == height else cv2.resize(image, (CLIP_WIDTH, height))
+        for image in decoded
+    ]
+    import tempfile
+
+    for fourcc, extension, content_type in (
+        ("avc1", "mp4", "video/mp4"),
+        ("VP80", "webm", "video/webm"),
+    ):
+        path = os.path.join(
+            tempfile.gettempdir(),
+            f"yelo-clip-{os.getpid()}-{threading.get_ident()}.{extension}",
+        )
+        writer = cv2.VideoWriter(
+            path,
+            cv2.VideoWriter_fourcc(*fourcc),
+            max(1.0, CLIP_PLAYBACK_FPS),
+            (CLIP_WIDTH, height),
+        )
+        if not writer.isOpened():
+            writer.release()
+            continue
+        for image in decoded:
+            writer.write(image)
+        writer.release()
+        try:
+            with open(path, "rb") as handle:
+                data = handle.read()
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        if len(data) > 1024:
+            return data, extension, content_type
+    return None
+
+
+def capture_event_clip(
+    camera: dict[str, Any],
+    token: str,
+    event: dict[str, Any],
+    event_time: float,
+) -> None:
+    camera_id = str(camera["id"])
+    stats = frame_stats.setdefault(camera_id, {"received": 0})
+    stats["last_clip_status"] = "recording"
+    deadline = event_time + CLIP_POST_SECONDS
+    while time.time() < deadline + 5:
+        time.sleep(2)
+    with frame_buffer_lock:
+        frames = [
+            frame
+            for timestamp, frame in frame_buffers.get(camera_id, [])
+            if event_time - CLIP_PRE_SECONDS <= timestamp <= deadline
+        ]
+    clip = encode_clip(frames)
+    if clip is None:
+        stats["last_clip_status"] = "skipped_no_frames"
+        return
+    data, extension, content_type = clip
+    if len(data) > CLIP_MAX_UPLOAD_BYTES:
+        stats["last_clip_status"] = "skipped_too_large"
+        print(f"Event clip skipped: {len(data)} bytes exceeds the upload limit.")
+        return
+    payload = {
+        "token": token,
+        "cameraId": camera_id,
+        "eventKey": event["eventKey"],
+        "contentType": content_type,
+        "extension": extension,
+        "startedAt": time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(event_time - CLIP_PRE_SECONDS)
+        ),
+        "frameCount": len(frames),
+        "clipBase64": base64.b64encode(data).decode("ascii"),
+    }
+    request = urllib.request.Request(
+        CLIP_REPORT_URL,
+        data=json_bytes(payload),
+        headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            json.loads(response.read().decode("utf-8"))
+            stats["last_clip_status"] = "uploaded"
+            print(f"Uploaded {len(frames)}-frame evidence clip ({len(data)} bytes).")
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as error:
+        stats["last_clip_status"] = "failed"
+        stats["last_clip_error"] = str(error)
+        print(f"Evidence clip upload failed: {error}")
+
+
+def start_event_clip(
+    camera: dict[str, Any],
+    token: str,
+    event: dict[str, Any],
+) -> None:
+    if not CLIP_ENABLED or not CLIP_REPORT_URL or not SUPABASE_ANON_KEY:
+        return
+    threading.Thread(
+        target=capture_event_clip,
+        args=(camera, token, event, time.time()),
         daemon=True,
     ).start()
 
@@ -497,6 +647,7 @@ def process_frame(
     if not dimensions:
         raise ValueError("The request body is not a valid JPEG frame.")
     width, height = dimensions
+    remember_frame(str(camera["id"]), frame)
     detections: list[dict[str, Any]] = []
     inference_ms: float | None = None
     camera_id = str(camera["id"])
@@ -636,6 +787,7 @@ def process_frame(
     stats["confirmed_event_count"] = len(confirmed_events)
     for event in confirmed_events:
         start_event_report(camera, token, frame, event)
+        start_event_clip(camera, token, event)
     return {
         "accepted": True,
         "cameraId": camera_id,
@@ -717,6 +869,14 @@ class Handler(BaseHTTPRequestHandler):
                     "eventReportingReady": bool(
                         EVENT_REPORT_URL and SUPABASE_ANON_KEY
                     ),
+                    "clipCapture": {
+                        "enabled": bool(
+                            CLIP_ENABLED and CLIP_REPORT_URL and SUPABASE_ANON_KEY
+                        ),
+                        "preSeconds": CLIP_PRE_SECONDS,
+                        "postSeconds": CLIP_POST_SECONDS,
+                        "playbackFps": CLIP_PLAYBACK_FPS,
+                    },
                     "activeCameras": len(frame_stats),
                     "cameraDiagnostics": [
                         {
@@ -746,6 +906,10 @@ class Handler(BaseHTTPRequestHandler):
                             ),
                             "lastReportStatus": stats.get(
                                 "last_report_status",
+                                "none",
+                            ),
+                            "lastClipStatus": stats.get(
+                                "last_clip_status",
                                 "none",
                             ),
                             "lastReportEventId": stats.get(
