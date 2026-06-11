@@ -208,7 +208,7 @@ export default function CapturePage() {
       const sourceWidth = video.videoWidth;
       const sourceHeight = video.videoHeight;
       if (!sourceWidth || !sourceHeight) return;
-      const width = Math.min(sourceWidth, 960);
+      const width = Math.min(sourceWidth, 1280);
       const height = Math.round((sourceHeight / sourceWidth) * width);
       const canvas = document.createElement("canvas");
       canvas.width = width;
@@ -217,7 +217,7 @@ export default function CapturePage() {
       if (!context) throw new Error("This device could not prepare a camera frame.");
       context.drawImage(video, 0, 0, width, height);
       const frame = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/jpeg", 0.72),
+        canvas.toBlob(resolve, "image/jpeg", 0.82),
       );
       if (!frame) throw new Error("This device could not encode a camera frame.");
       const capturedAt = new Date().toISOString();
@@ -296,11 +296,37 @@ export default function CapturePage() {
           : null,
       );
       setModelName(typeof result?.modelName === "string" ? result.modelName : "");
-      setProcessorMessage(
-        result?.modelReady
-          ? `${Number(result?.detectionCount) || 0} objects detected in the latest frame.`
-          : "Frames are reaching the local gateway. YOLO is not loaded yet.",
-      );
+      if (!result?.modelReady) {
+        setProcessorMessage("Frames are reaching the local gateway. YOLO is not loaded yet.");
+      } else {
+        const latestDetections = Array.isArray(result?.detections) ? result.detections : [];
+        const labels = latestDetections.map((detection: Detection) => detection.label.toLowerCase());
+        const personDetected = labels.includes("person");
+        const wasteDetected = latestDetections.some((detection: Detection) =>
+          ["bottle", "cup", "bowl", "banana", "apple", "orange", "backpack", "handbag", "suitcase"]
+            .includes(detection.label.toLowerCase()),
+        );
+        const activeZoneCount = Array.isArray(result?.restrictedZones)
+          ? result.restrictedZones.length
+          : 0;
+        const confirmingCount = Array.isArray(result?.eventCandidates)
+          ? result.eventCandidates.length
+          : 0;
+
+        if (activeZoneCount === 0) {
+          setProcessorMessage("YOLO is active, but this camera has no active restricted area.");
+        } else if (confirmingCount > 0) {
+          setProcessorMessage("Possible littering detected. Keep the bottle still while the confirmation timer finishes.");
+        } else if (!wasteDetected && !personDetected) {
+          setProcessorMessage("YOLO is active. No person or supported waste object is clear in the latest frame.");
+        } else if (!wasteDetected) {
+          setProcessorMessage("Person detected. Show a clear bottle or cup and place it inside the restricted area.");
+        } else if ((Number(result?.violationCount) || 0) === 0) {
+          setProcessorMessage("Waste detected, but its bottom point is outside the saved restricted area.");
+        } else {
+          setProcessorMessage("Waste is inside the zone. Keep the person nearby briefly and leave the object still.");
+        }
+      }
     } catch (frameError) {
       setProcessorState("error");
       setDetections([]);
@@ -326,7 +352,7 @@ export default function CapturePage() {
 
   useEffect(() => {
     if (!streaming || !camera || !token) return;
-    const interval = window.setInterval(() => void sendFrame(), 1_000);
+    const interval = window.setInterval(() => void sendFrame(), 1_500);
     return () => window.clearInterval(interval);
   }, [camera, sendFrame, streaming, token]);
 
@@ -660,21 +686,35 @@ export default function CapturePage() {
               <span className="capture-control-icon success"><CheckCircle2 size={24} /></span>
               <p className="eyebrow">Connected device</p>
               <h2>{camera.name}</h2>
-              <dl>
-                <div><dt>Status</dt><dd><span className="capture-status-dot" /> {streaming ? "Streaming" : "Paired"}</dd></div>
-                <div><dt>Source</dt><dd>{camera.source_type.replaceAll("_", " ")}</dd></div>
-                <div><dt>Heartbeat</dt><dd>{lastHeartbeat ? lastHeartbeat.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</dd></div>
-                <div><dt>Detection</dt><dd>{camera.detection_enabled ? "Enabled" : "Paused"}</dd></div>
-                <div><dt>Processor</dt><dd><span className={`processor-dot ${processorState}`} /> {processorState === "connected" ? "Receiving" : processorState === "error" ? "Unavailable" : processorState === "sending" ? "Sending" : "Waiting"}</dd></div>
-                <div><dt>Frames sent</dt><dd>{framesSent}{processorLatency !== null ? ` · ${processorLatency} ms` : ""}</dd></div>
+              <div className="capture-status-primary">
+                <div className={`capture-status-tile ${streaming ? "live" : ""}`}>
+                  <span className="capture-status-dot" aria-hidden="true" />
+                  <div><small>Status</small><strong>{streaming ? "Streaming" : "Paired"}</strong></div>
+                </div>
+                <div className="capture-status-tile">
+                  <span className={`processor-dot ${processorState}`} aria-hidden="true" />
+                  <div><small>Processor</small><strong>{processorState === "connected" ? "Receiving" : processorState === "error" ? "Unavailable" : processorState === "sending" ? "Sending" : "Waiting"}</strong></div>
+                </div>
+              </div>
+
+              <p className="capture-metric-group-label">Detection</p>
+              <dl className="capture-metric-grid">
                 <div><dt>Latest objects</dt><dd>{detections.length}</dd></div>
                 <div><dt>Restricted areas</dt><dd>{restrictedZones.length}</dd></div>
                 <div><dt>Objects in zones</dt><dd className={violationCount > 0 ? "capture-warning-value" : ""}>{violationCount}</dd></div>
                 <div><dt>Confirming events</dt><dd>{eventCandidates.length}</dd></div>
                 <div><dt>Events reported</dt><dd>{confirmedEventCount}</dd></div>
-                <div><dt>Dashboard preview</dt><dd>{dashboardPreviewAt ? dashboardPreviewAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Waiting"}</dd></div>
-                <div><dt>Live viewers</dt><dd>{viewerCount}</dd></div>
                 <div><dt>YOLO inference</dt><dd>{inferenceLatency !== null ? `${inferenceLatency} ms` : "Waiting"}</dd></div>
+              </dl>
+
+              <p className="capture-metric-group-label">Connection</p>
+              <dl className="capture-metric-grid">
+                <div><dt>Source</dt><dd>{camera.source_type.replaceAll("_", " ")}</dd></div>
+                <div><dt>Detection</dt><dd>{camera.detection_enabled ? "Enabled" : "Paused"}</dd></div>
+                <div><dt>Heartbeat</dt><dd>{lastHeartbeat ? lastHeartbeat.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</dd></div>
+                <div><dt>Frames sent</dt><dd>{framesSent}{processorLatency !== null ? ` · ${processorLatency}ms` : ""}</dd></div>
+                <div><dt>Dashboard preview</dt><dd>{dashboardPreviewAt ? dashboardPreviewAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</dd></div>
+                <div><dt>Live viewers</dt><dd>{viewerCount}</dd></div>
               </dl>
               {eventCandidates.length > 0 && (
                 <div className="capture-event-candidates" role="status" aria-live="polite">

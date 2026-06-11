@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
+  BookOpen,
   Building2,
   Check,
   ChevronDown,
@@ -21,6 +22,7 @@ import {
   UserCog,
   Users,
   Video,
+  X,
 } from "lucide-react";
 
 type Role = "society_admin" | "super_admin" | "operator";
@@ -282,8 +284,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         aria-expanded={notificationOpen}
         onClick={() => setNotificationOpen((open) => !open)}
       >
-        <Bell size={21} />
-        {unreadNotifications > 0 && <span>{Math.min(unreadNotifications, 9)}</span>}
+        <Bell size={21} aria-hidden="true" />
+        <span className="notification-label">Notifications</span>
+        {unreadNotifications > 0 && <span className="notification-count">{Math.min(unreadNotifications, 9)}</span>}
       </button>
       {notificationOpen && (
         <div className="popover-menu notification-popover" role="menu" aria-label="Recent notifications">
@@ -312,7 +315,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  if (pathname.startsWith("/auth") || pathname.startsWith("/capture")) {
+  if (pathname.startsWith("/auth") || pathname.startsWith("/capture") || pathname.startsWith("/legal")) {
     return <>{children}</>;
   }
   if (auth.configured && (auth.loading || !auth.user)) {
@@ -334,7 +337,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {effectiveRole === "super_admin" ? (
             <Link className="platform-scope-card focus-ring" href="/super-admin/societies">
               <span className="platform-scope-icon" aria-hidden="true"><Building2 size={20} /></span>
-              <span><strong>Entire platform</strong><small>{societies.length} societies · {societies.reduce((total, item) => total + item.cameras, 0)} cameras</small></span>
+              <span><strong>Entire platform</strong><small>{societies.length} societies / {societies.reduce((total, item) => total + item.cameras, 0)} cameras</small></span>
               <ChevronDown className="scope-arrow" size={18} aria-hidden="true" />
             </Link>
           ) : (
@@ -414,6 +417,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
               </>}
               <div className="menu-separator" />
+              <Link href="/guide" className="popover-link" onClick={() => setUserOpen(false)}><BookOpen size={17} /> How YELO works</Link>
               <Link href="/account" className="popover-link" onClick={() => setUserOpen(false)}><Settings size={17} /> Account settings</Link>
               <button className="logout-item" role="menuitem" onClick={() => void auth.signOut()}><LogOut size={17} /> Sign out</button>
             </div>
@@ -446,7 +450,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <section className="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title">
             <div className="mobile-sheet-heading">
               <div><p className="eyebrow">Navigation</p><h2 id="mobile-menu-title">Menu and account</h2></div>
-              <button ref={mobileCloseButtonRef} className="icon-button focus-ring" type="button" aria-label="Close menu" onClick={closeMobileMenu}><span aria-hidden="true">×</span></button>
+              <button ref={mobileCloseButtonRef} className="icon-button focus-ring" type="button" aria-label="Close menu" onClick={closeMobileMenu}><X size={21} aria-hidden="true" /></button>
             </div>
             <div className="mobile-context-card">
               <span className="society-avatar" aria-hidden="true">{effectiveRole === "super_admin" ? <Building2 size={18} /> : society?.initials ?? "--"}</span>
