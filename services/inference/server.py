@@ -97,7 +97,10 @@ EVENT_COOLDOWN_SECONDS = int(os.getenv("YELO_EVENT_COOLDOWN_SECONDS", "120"))
 CLIP_ENABLED = os.getenv("YELO_CLIP_ENABLED", "1") not in {"0", "false", "no"}
 CLIP_PRE_SECONDS = float(os.getenv("YELO_CLIP_PRE_SECONDS", "60"))
 CLIP_POST_SECONDS = float(os.getenv("YELO_CLIP_POST_SECONDS", "60"))
-CLIP_PLAYBACK_FPS = float(os.getenv("YELO_CLIP_PLAYBACK_FPS", "4"))
+# Output container frame rate; source frames are duplicated to play in real time.
+CLIP_OUTPUT_FPS = float(os.getenv("YELO_CLIP_OUTPUT_FPS", "15"))
+# Approximate rate frames actually arrive, used to hold the final frame.
+CLIP_SOURCE_FPS = float(os.getenv("YELO_CLIP_SOURCE_FPS", "0.7"))
 CLIP_WIDTH = int(os.getenv("YELO_CLIP_WIDTH", "640"))
 CLIP_MAX_UPLOAD_BYTES = int(os.getenv("YELO_CLIP_MAX_UPLOAD_BYTES", str(14 * 1024 * 1024)))
 CLIP_REPORT_URL = os.getenv(
@@ -354,25 +357,45 @@ def remember_frame(camera_id: str, frame: bytes) -> None:
             buffer.pop(0)
 
 
-def encode_clip(frames: list[bytes]) -> tuple[bytes, str, str] | None:
-    """Stitch JPEG frames into a browser-playable video (H.264, then VP8)."""
+def encode_clip(samples: list[tuple[float, bytes]]) -> tuple[bytes, str, str] | None:
+    """Stitch timestamped JPEG frames into a smooth, browser-playable video.
+
+    The source frame rate is low (about one frame per second), so each frame is
+    held on screen for its real duration at a fixed output rate. That plays the
+    clip back at natural speed instead of a fast-forward slideshow, and the
+    duplicated frames compress to almost nothing in H.264.
+    """
     import cv2
     import numpy
 
-    decoded = []
-    for frame in frames:
+    decoded: list[tuple[float, Any]] = []
+    height = 0
+    for timestamp, frame in samples:
         image = cv2.imdecode(numpy.frombuffer(frame, dtype=numpy.uint8), cv2.IMREAD_COLOR)
         if image is None:
             continue
-        height = int(round(image.shape[0] * (CLIP_WIDTH / image.shape[1])))
-        decoded.append(cv2.resize(image, (CLIP_WIDTH, height)))
-    if len(decoded) < 4:
+        if height == 0:
+            height = int(round(image.shape[0] * (CLIP_WIDTH / image.shape[1])))
+            height += height % 2  # even dimensions keep H.264 encoders happy
+        if image.shape[1] != CLIP_WIDTH or image.shape[0] != height:
+            image = cv2.resize(image, (CLIP_WIDTH, height))
+        decoded.append((timestamp, image))
+    if len(decoded) < 3:
         return None
-    height = decoded[0].shape[0]
-    decoded = [
-        image if image.shape[0] == height else cv2.resize(image, (CLIP_WIDTH, height))
-        for image in decoded
-    ]
+
+    output_fps = max(2.0, CLIP_OUTPUT_FPS)
+    default_hold = 1.0 / max(0.2, CLIP_SOURCE_FPS)
+    # Number of output frames to hold each source frame, based on the gap to the
+    # next sample (clamped so a long stall does not freeze the clip for minutes).
+    holds: list[int] = []
+    for index, (timestamp, _) in enumerate(decoded):
+        if index + 1 < len(decoded):
+            gap = decoded[index + 1][0] - timestamp
+        else:
+            gap = default_hold
+        gap = min(3.0, max(1.0 / output_fps, gap))
+        holds.append(max(1, int(round(gap * output_fps))))
+
     import tempfile
 
     for fourcc, extension, content_type in (
@@ -386,14 +409,15 @@ def encode_clip(frames: list[bytes]) -> tuple[bytes, str, str] | None:
         writer = cv2.VideoWriter(
             path,
             cv2.VideoWriter_fourcc(*fourcc),
-            max(1.0, CLIP_PLAYBACK_FPS),
+            output_fps,
             (CLIP_WIDTH, height),
         )
         if not writer.isOpened():
             writer.release()
             continue
-        for image in decoded:
-            writer.write(image)
+        for (_, image), hold in zip(decoded, holds):
+            for _ in range(hold):
+                writer.write(image)
         writer.release()
         try:
             with open(path, "rb") as handle:
@@ -421,12 +445,12 @@ def capture_event_clip(
     while time.time() < deadline + 5:
         time.sleep(2)
     with frame_buffer_lock:
-        frames = [
-            frame
+        samples = [
+            (timestamp, frame)
             for timestamp, frame in frame_buffers.get(camera_id, [])
             if event_time - CLIP_PRE_SECONDS <= timestamp <= deadline
         ]
-    clip = encode_clip(frames)
+    clip = encode_clip(samples)
     if clip is None:
         stats["last_clip_status"] = "skipped_no_frames"
         return
@@ -444,7 +468,7 @@ def capture_event_clip(
         "startedAt": time.strftime(
             "%Y-%m-%dT%H:%M:%SZ", time.gmtime(event_time - CLIP_PRE_SECONDS)
         ),
-        "frameCount": len(frames),
+        "frameCount": len(samples),
         "clipBase64": base64.b64encode(data).decode("ascii"),
     }
     request = urllib.request.Request(
@@ -934,7 +958,7 @@ class Handler(BaseHTTPRequestHandler):
                         ),
                         "preSeconds": CLIP_PRE_SECONDS,
                         "postSeconds": CLIP_POST_SECONDS,
-                        "playbackFps": CLIP_PLAYBACK_FPS,
+                        "outputFps": CLIP_OUTPUT_FPS,
                     },
                     "activeCameras": len(frame_stats),
                     "cameraDiagnostics": [

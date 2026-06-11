@@ -1,7 +1,7 @@
 "use client";
 
 import { Minus, Plus, RotateCcw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 6;
@@ -14,8 +14,10 @@ function clampScale(value: number) {
 }
 
 // Wraps evidence media (image or video) with zoom and pan so reviewers can
-// inspect details such as the person involved. Buttons are the primary,
-// always-visible controls; wheel, drag, and double-tap are accelerators.
+// inspect details such as the person involved. Panning is applied directly to
+// the DOM during a drag (no React re-render per move) so it stays smooth, then
+// committed to state on release. Buttons are the primary, always-visible
+// controls; wheel, drag, and double-tap are accelerators.
 export function ZoomableMedia({
   children,
   label,
@@ -28,6 +30,8 @@ export function ZoomableMedia({
   controlsSafeArea?: number;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<View>({ scale: 1, x: 0, y: 0 });
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -36,10 +40,11 @@ export function ZoomableMedia({
     originY: number;
     moved: boolean;
   } | null>(null);
+  const rafRef = useRef(0);
   const lastTapRef = useRef(0);
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 });
 
-  function clampOffset(next: View): View {
+  const clampOffset = useCallback((next: View): View => {
     const frame = frameRef.current;
     if (!frame) return { ...next, x: 0, y: 0 };
     const maxX = ((next.scale - 1) * frame.clientWidth) / 2;
@@ -49,24 +54,49 @@ export function ZoomableMedia({
       x: Math.min(maxX, Math.max(-maxX, next.x)),
       y: Math.min(maxY, Math.max(-maxY, next.y)),
     };
-  }
+  }, []);
 
-  function zoomAnchored(current: View, nextScale: number, anchorX: number, anchorY: number): View {
-    const scale = clampScale(nextScale);
-    const ratio = scale / current.scale;
-    return clampOffset({
-      scale,
-      x: anchorX - (anchorX - current.x) * ratio,
-      y: anchorY - (anchorY - current.y) * ratio,
-    });
-  }
+  // Writes a view to both the live ref and the DOM, without a React render.
+  const paint = useCallback((next: View) => {
+    viewRef.current = next;
+    const content = contentRef.current;
+    if (content) {
+      content.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`;
+    }
+  }, []);
+
+  // Commits the live view into React state (updates badge + button states).
+  const commit = useCallback(() => setView(viewRef.current), []);
+
+  const apply = useCallback(
+    (next: View) => {
+      const clamped = clampOffset(next);
+      paint(clamped);
+      setView(clamped);
+    },
+    [clampOffset, paint],
+  );
+
+  const zoomAnchored = useCallback(
+    (nextScale: number, anchorX: number, anchorY: number) => {
+      const current = viewRef.current;
+      const scale = clampScale(nextScale);
+      const ratio = scale / current.scale;
+      apply({
+        scale,
+        x: anchorX - (anchorX - current.x) * ratio,
+        y: anchorY - (anchorY - current.y) * ratio,
+      });
+    },
+    [apply],
+  );
 
   function zoomCentered(factor: number) {
-    setView((current) => zoomAnchored(current, current.scale * factor, 0, 0));
+    zoomAnchored(viewRef.current.scale * factor, 0, 0);
   }
 
   function reset() {
-    setView({ scale: 1, x: 0, y: 0 });
+    apply({ scale: 1, x: 0, y: 0 });
   }
 
   useEffect(() => {
@@ -77,67 +107,69 @@ export function ZoomableMedia({
       const rect = frame!.getBoundingClientRect();
       const anchorX = event.clientX - rect.left - rect.width / 2;
       const anchorY = event.clientY - rect.top - rect.height / 2;
-      setView((current) =>
-        zoomAnchored(current, current.scale * Math.exp(-event.deltaY * 0.0018), anchorX, anchorY),
-      );
+      zoomAnchored(viewRef.current.scale * Math.exp(-event.deltaY * 0.0018), anchorX, anchorY);
     }
     frame.addEventListener("wheel", onWheel, { passive: false });
-    return () => frame.removeEventListener("wheel", onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      frame.removeEventListener("wheel", onWheel);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [zoomAnchored]);
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     const frame = frameRef.current;
-    if (!frame) return;
+    if (!frame || viewRef.current.scale <= 1) return;
     const rect = frame.getBoundingClientRect();
     if (controlsSafeArea > 0 && event.clientY > rect.bottom - controlsSafeArea) {
       return; // Leave the native video control strip alone.
     }
-    if (view.scale > 1) {
-      dragRef.current = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        originX: view.x,
-        originY: view.y,
-        moved: false,
-      };
-      frame.setPointerCapture(event.pointerId);
-    }
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: viewRef.current.x,
+      originY: viewRef.current.y,
+      moved: false,
+    };
+    frame.setPointerCapture(event.pointerId);
   }
 
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
     if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
-    setView((current) =>
-      clampOffset({ scale: current.scale, x: drag.originX + dx, y: drag.originY + dy }),
-    );
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      paint(clampOffset({ scale: viewRef.current.scale, x: drag.originX + dx, y: drag.originY + dy }));
+    });
   }
 
-  function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    const frame = frameRef.current;
+  function endDrag(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (drag && drag.pointerId === event.pointerId) {
-      frame?.releasePointerCapture(event.pointerId);
+      frameRef.current?.releasePointerCapture(event.pointerId);
       dragRef.current = null;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      commit();
       if (drag.moved) return;
     }
     if (controlsSafeArea > 0) return; // No tap-zoom on video; it fights play/pause.
     const now = Date.now();
     if (now - lastTapRef.current < 350) {
       lastTapRef.current = 0;
-      const rect = frame?.getBoundingClientRect();
+      const rect = frameRef.current?.getBoundingClientRect();
       if (!rect) return;
       const anchorX = event.clientX - rect.left - rect.width / 2;
       const anchorY = event.clientY - rect.top - rect.height / 2;
-      setView((current) =>
-        current.scale > 1
-          ? { scale: 1, x: 0, y: 0 }
-          : zoomAnchored(current, 2.5, anchorX, anchorY),
-      );
+      if (viewRef.current.scale > 1) apply({ scale: 1, x: 0, y: 0 });
+      else zoomAnchored(2.5, anchorX, anchorY);
     } else {
       lastTapRef.current = now;
     }
@@ -151,17 +183,15 @@ export function ZoomableMedia({
       aria-label={`${label}. Use the zoom buttons, mouse wheel, or double-tap to magnify.`}
       style={{
         touchAction: view.scale > 1 ? "none" : "auto",
-        cursor: view.scale > 1 ? "grab" : "default",
+        cursor: view.scale > 1 ? (dragRef.current ? "grabbing" : "grab") : "default",
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onDragStart={(event) => event.preventDefault()}
     >
-      <div
-        className="zoom-frame-content"
-        style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
-      >
+      <div ref={contentRef} className="zoom-frame-content">
         {children}
       </div>
       <div className="zoom-toolbar">
