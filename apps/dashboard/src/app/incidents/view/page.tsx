@@ -7,16 +7,25 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 
+type CameraInfo = { name: string; location_label: string | null };
+type ZoneInfo = { name: string };
 type IncidentDetail = {
   id: string;
   object_class: string;
   confidence: number;
   status: string;
   detected_at: string;
-  cameras: { name: string; location_label: string }[];
-  restricted_zones: { name: string }[];
+  // Supabase returns to-one joins as objects, but typed loosely they can
+  // arrive as arrays too — normalize before display.
+  cameras: CameraInfo | CameraInfo[] | null;
+  restricted_zones: ZoneInfo | ZoneInfo[] | null;
   event_media: { storage_path: string; captured_at: string; media_type: string | null }[];
 };
+
+function firstOf<T>(value: T | T[] | null): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
 
 const labels: Record<string, string> = { new: "Needs review", under_review: "Under review", confirmed: "Confirmed", false_positive: "False alert", resolved: "Resolved" };
 
@@ -121,9 +130,9 @@ export default function IncidentDetailPage() {
         </section>
         <aside className="review-sidebar">
           <section className="panel detail-card"><h2>Event details</h2><dl className="detail-list">
-            <div><dt><Camera size={16} /> Camera</dt><dd>{incident.cameras?.[0]?.name ?? "Unknown"}</dd></div>
-            <div><dt><MapPin size={16} /> Location</dt><dd>{incident.cameras?.[0]?.location_label ?? "Unavailable"}</dd></div>
-            <div><dt><ShieldAlert size={16} /> Zone</dt><dd>{incident.restricted_zones?.[0]?.name ?? "No zone"}</dd></div>
+            <div><dt><Camera size={16} /> Camera</dt><dd>{firstOf(incident.cameras)?.name ?? "Unknown"}</dd></div>
+            <div><dt><MapPin size={16} /> Location</dt><dd>{firstOf(incident.cameras)?.location_label ?? "Unavailable"}</dd></div>
+            <div><dt><ShieldAlert size={16} /> Zone</dt><dd>{firstOf(incident.restricted_zones)?.name ?? "No zone"}</dd></div>
             <div><dt>AI confidence</dt><dd>{Math.round(Number(incident.confidence) * 100)}%</dd></div>
           </dl><div className="ai-note"><ShieldAlert size={19} /><p>This is an AI suggestion, not proof. Inspect available evidence before deciding.</p></div></section>
           <section className="panel decision-card"><div><p className="eyebrow">Record outcome</p><h2>Review decision</h2></div>
