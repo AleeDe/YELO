@@ -6,8 +6,10 @@ import {
   Check,
   ImagePlus,
   LoaderCircle,
+  Move,
   Pencil,
   Plus,
+  RectangleHorizontal,
   RotateCcw,
   Trash2,
   Undo2,
@@ -46,6 +48,7 @@ export function ZoneEditor({
   onZonesChange,
 }: ZoneEditorProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const draggingPointRef = useRef<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -53,6 +56,7 @@ export function ZoneEditor({
   const [pointX, setPointX] = useState("50");
   const [pointY, setPointY] = useState("50");
   const [referenceImage, setReferenceImage] = useState("");
+  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -69,6 +73,7 @@ export function ZoneEditor({
     setEditingId(null);
     setName(`Restricted area ${zones.length + 1}`);
     setPoints([]);
+    setSelectedPoint(null);
     setReferenceImage(latestFrameUrl);
     setError("");
   }
@@ -78,6 +83,7 @@ export function ZoneEditor({
     setEditingId(zone.id);
     setName(zone.name);
     setPoints(zone.polygon);
+    setSelectedPoint(null);
     setReferenceImage(latestFrameUrl);
     setError("");
   }
@@ -87,6 +93,8 @@ export function ZoneEditor({
     setEditingId(null);
     setName("");
     setPoints([]);
+    setSelectedPoint(null);
+    draggingPointRef.current = null;
     setError("");
   }
 
@@ -101,14 +109,99 @@ export function ZoneEditor({
     setError("");
   }
 
-  function addPoint(event: React.PointerEvent<HTMLButtonElement>) {
+  function addPoint(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.currentTarget !== event.target) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const point = {
       x: normalizedPoint((event.clientX - bounds.left) / bounds.width),
       y: normalizedPoint((event.clientY - bounds.top) / bounds.height),
     };
-    setPoints((current) => [...current, point]);
+    setPoints((current) => {
+      setSelectedPoint(current.length);
+      return [...current, point];
+    });
     setError("");
+  }
+
+  function updatePoint(index: number, clientX: number, clientY: number, surface: HTMLElement) {
+    const bounds = surface.getBoundingClientRect();
+    const nextPoint = {
+      x: normalizedPoint((clientX - bounds.left) / bounds.width),
+      y: normalizedPoint((clientY - bounds.top) / bounds.height),
+    };
+    setPoints((current) =>
+      current.map((point, pointIndex) => (pointIndex === index ? nextPoint : point)),
+    );
+  }
+
+  function startDraggingPoint(
+    event: React.PointerEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectedPoint(index);
+    draggingPointRef.current = index;
+  }
+
+  function dragPoint(event: React.PointerEvent<HTMLButtonElement>, index: number) {
+    if (draggingPointRef.current !== index) return;
+    event.stopPropagation();
+    const surface = event.currentTarget.parentElement;
+    if (surface) updatePoint(index, event.clientX, event.clientY, surface);
+  }
+
+  function stopDraggingPoint(event: React.PointerEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    draggingPointRef.current = null;
+  }
+
+  function movePointWithKeyboard(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    const movement: Record<string, ZonePoint> = {
+      ArrowLeft: { x: -0.01, y: 0 },
+      ArrowRight: { x: 0.01, y: 0 },
+      ArrowUp: { x: 0, y: -0.01 },
+      ArrowDown: { x: 0, y: 0.01 },
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    setPoints((current) =>
+      current.map((point, pointIndex) =>
+        pointIndex === index
+          ? {
+              x: normalizedPoint(point.x + delta.x),
+              y: normalizedPoint(point.y + delta.y),
+            }
+          : point,
+      ),
+    );
+  }
+
+  function useStarterRectangle() {
+    setPoints([
+      { x: 0.12, y: 0.16 },
+      { x: 0.88, y: 0.16 },
+      { x: 0.88, y: 0.86 },
+      { x: 0.12, y: 0.86 },
+    ]);
+    setSelectedPoint(0);
+    setError("");
+  }
+
+  function removePoint(index: number) {
+    setPoints((current) => current.filter((_, pointIndex) => pointIndex !== index));
+    setSelectedPoint((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
+    });
   }
 
   function addCoordinatePoint(event: React.FormEvent<HTMLFormElement>) {
@@ -123,6 +216,7 @@ export function ZoneEditor({
       ...current,
       { x: normalizedPoint(x / 100), y: normalizedPoint(y / 100) },
     ]);
+    setSelectedPoint(points.length);
     setError("");
   }
 
@@ -217,18 +311,19 @@ export function ZoneEditor({
             <div className="zone-canvas-toolbar">
               <div>
                 <strong>{editingId ? "Edit restricted area" : "Create restricted area"}</strong>
-                <small>Tap around the boundary in order. Three or more points are required.</small>
+                <small>Tap to add corners, then drag the numbered handles into position.</small>
               </div>
               <span className={points.length >= 3 ? "complete" : ""}>
                 {points.length} {points.length === 1 ? "point" : "points"}
               </span>
             </div>
 
-            <button
+            <div
               className={`zone-drawing-surface ${referenceImage ? "has-image" : ""}`}
-              type="button"
+              role="group"
+              tabIndex={0}
               onPointerDown={addPoint}
-              aria-label="Zone drawing area. Tap to add a polygon point."
+              aria-label="Restricted-zone drawing area. Tap empty space to add a point. Drag numbered handles to move them."
               style={
                 referenceImage
                   ? { backgroundImage: `url("${referenceImage}")` }
@@ -253,16 +348,34 @@ export function ZoneEditor({
                     points={points.map((point) => `${point.x * 100},${point.y * 100}`).join(" ")}
                   />
                 )}
-                {points.map((point, index) => (
-                  <g key={`${point.x}-${point.y}-${index}`}>
-                    <circle cx={point.x * 100} cy={point.y * 100} r="1.8" />
-                    <text x={point.x * 100} y={point.y * 100} dy=".7">
-                      {index + 1}
-                    </text>
-                  </g>
-                ))}
               </svg>
-            </button>
+              {points.map((point, index) => (
+                <button
+                  key={index}
+                  className={`zone-point-handle focus-ring ${selectedPoint === index ? "selected" : ""}`}
+                  type="button"
+                  style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+                  aria-label={`Boundary point ${index + 1}. Drag to move, or use arrow keys.`}
+                  aria-pressed={selectedPoint === index}
+                  onPointerDown={(event) => startDraggingPoint(event, index)}
+                  onPointerMove={(event) => dragPoint(event, index)}
+                  onPointerUp={stopDraggingPoint}
+                  onPointerCancel={stopDraggingPoint}
+                  onKeyDown={(event) => movePointWithKeyboard(event, index)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedPoint(index);
+                  }}
+                >
+                  {index + 1}
+                </button>
+              ))}
+              {points.length > 0 && (
+                <span className="zone-drawing-hint">
+                  <Move size={16} /> Drag points to fine-tune the boundary
+                </span>
+              )}
+            </div>
 
             <input
               ref={imageInputRef}
@@ -273,13 +386,32 @@ export function ZoneEditor({
               onChange={(event) => chooseReferenceImage(event.target.files?.[0])}
             />
             <div className="zone-canvas-actions">
+              <button className="secondary-button focus-ring" type="button" onClick={useStarterRectangle}>
+                <RectangleHorizontal size={18} /> Start with rectangle
+              </button>
               <button className="secondary-button focus-ring" type="button" onClick={() => imageInputRef.current?.click()}>
                 <ImagePlus size={18} /> {referenceImage ? "Replace image" : "Add camera image"}
               </button>
-              <button className="secondary-button focus-ring" type="button" disabled={points.length === 0} onClick={() => setPoints((current) => current.slice(0, -1))}>
+              <button className="secondary-button focus-ring" type="button" disabled={points.length === 0} onClick={() => {
+                setPoints((current) => current.slice(0, -1));
+                setSelectedPoint(null);
+              }}>
                 <Undo2 size={18} /> Undo point
               </button>
-              <button className="quiet-button focus-ring" type="button" disabled={points.length === 0} onClick={() => setPoints([])}>
+              <button
+                className="secondary-button danger-text focus-ring"
+                type="button"
+                disabled={selectedPoint === null}
+                onClick={() => {
+                  if (selectedPoint !== null) removePoint(selectedPoint);
+                }}
+              >
+                <Trash2 size={17} /> Remove selected
+              </button>
+              <button className="quiet-button focus-ring" type="button" disabled={points.length === 0} onClick={() => {
+                setPoints([]);
+                setSelectedPoint(null);
+              }}>
                 <RotateCcw size={17} /> Reset
               </button>
             </div>
@@ -308,14 +440,21 @@ export function ZoneEditor({
               ) : (
                 <ol>
                   {points.map((point, index) => (
-                    <li key={`${point.x}-${point.y}-${index}`}>
+                    <li key={index} className={selectedPoint === index ? "selected" : ""}>
                       <span>{index + 1}</span>
-                      <code>{Math.round(point.x * 100)}%, {Math.round(point.y * 100)}%</code>
+                      <button
+                        className="zone-point-select focus-ring"
+                        type="button"
+                        onClick={() => setSelectedPoint(index)}
+                      >
+                        <code>{Math.round(point.x * 100)}%, {Math.round(point.y * 100)}%</code>
+                        <small>{selectedPoint === index ? "Selected" : "Select and drag on image"}</small>
+                      </button>
                       <button
                         className="icon-button focus-ring"
                         type="button"
                         aria-label={`Remove point ${index + 1}`}
-                        onClick={() => setPoints((current) => current.filter((_, pointIndex) => pointIndex !== index))}
+                        onClick={() => removePoint(index)}
                       >
                         <X size={16} />
                       </button>

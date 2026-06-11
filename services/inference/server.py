@@ -22,10 +22,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 MAX_FRAME_BYTES = 2 * 1024 * 1024
 TOKEN_CACHE_SECONDS = 30
-MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26n.pt")
+MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26m.pt")
 MODEL_DEVICE = os.getenv("YELO_MODEL_DEVICE", "cpu")
-MODEL_CONFIDENCE = float(os.getenv("YELO_MODEL_CONFIDENCE", "0.35"))
-MODEL_IMAGE_SIZE = int(os.getenv("YELO_MODEL_IMAGE_SIZE", "640"))
+MODEL_CONFIDENCE = float(os.getenv("YELO_MODEL_CONFIDENCE", "0.2"))
+MODEL_IMAGE_SIZE = int(os.getenv("YELO_MODEL_IMAGE_SIZE", "960"))
 TRACKER_CONFIG = os.getenv("YELO_TRACKER_CONFIG", "bytetrack.yaml")
 TRACKER_STALE_SECONDS = int(os.getenv("YELO_TRACKER_STALE_SECONDS", "120"))
 TRACK_HISTORY_LENGTH = int(os.getenv("YELO_TRACK_HISTORY_LENGTH", "20"))
@@ -36,7 +36,13 @@ EVENT_REPORT_URL = os.getenv(
 EVENT_STATIONARY_DISTANCE = float(
     os.getenv("YELO_EVENT_STATIONARY_DISTANCE", "0.015")
 )
-EVENT_PERSON_DISTANCE = float(os.getenv("YELO_EVENT_PERSON_DISTANCE", "0.3"))
+EVENT_PERSON_DISTANCE = float(os.getenv("YELO_EVENT_PERSON_DISTANCE", "0.75"))
+EVENT_PERSON_MEMORY_SECONDS = float(
+    os.getenv("YELO_EVENT_PERSON_MEMORY_SECONDS", "15")
+)
+EVENT_CANDIDATE_GRACE_SECONDS = float(
+    os.getenv("YELO_EVENT_CANDIDATE_GRACE_SECONDS", "12")
+)
 EVENT_COOLDOWN_SECONDS = int(os.getenv("YELO_EVENT_COOLDOWN_SECONDS", "120"))
 WASTE_CLASSES = {
     value.strip().lower()
@@ -62,6 +68,7 @@ camera_model_seen: dict[str, float] = {}
 track_history: dict[str, dict[int, list[tuple[float, float]]]] = {}
 event_candidates: dict[str, dict[str, dict[str, Any]]] = {}
 event_cooldowns: dict[str, float] = {}
+recent_people: dict[str, dict[int, dict[str, Any]]] = {}
 
 
 def normalized_polygon(value: Any) -> list[tuple[float, float]]:
@@ -143,6 +150,7 @@ def cleanup_stale_trackers(now: float) -> None:
         camera_model_seen.pop(camera_id, None)
         track_history.pop(camera_id, None)
         event_candidates.pop(camera_id, None)
+        recent_people.pop(camera_id, None)
 
 
 def camera_model(camera_id: str) -> Any:
@@ -171,19 +179,26 @@ def normalized_distance(
 
 
 def nearest_person(
+    camera_id: str,
     point: tuple[float, float],
     detections: list[dict[str, Any]],
-) -> tuple[dict[str, Any] | None, float | None]:
+) -> tuple[dict[str, Any] | None, float | None, float]:
+    now = time.monotonic()
+    remembered = recent_people.setdefault(camera_id, {})
     people = [
         detection
         for detection in detections
         if detection["label"].lower() == "person"
         and detection["trackId"] is not None
     ]
-    if not people:
-        return None, None
+    for track_id, person in list(remembered.items()):
+        if now - float(person["seenAt"]) > EVENT_PERSON_MEMORY_SECONDS:
+            remembered.pop(track_id, None)
+    available_people = people or list(remembered.values())
+    if not available_people:
+        return None, None, 0.0
     person = min(
-        people,
+        available_people,
         key=lambda detection: normalized_distance(
             point,
             (
@@ -192,13 +207,14 @@ def nearest_person(
             ),
         ),
     )
+    age = max(0.0, now - float(person.get("seenAt", now)))
     return person, normalized_distance(
         point,
         (
             float(person["groundPoint"]["x"]),
             float(person["groundPoint"]["y"]),
         ),
-    )
+    ), age
 
 
 def report_confirmed_event(
@@ -207,7 +223,12 @@ def report_confirmed_event(
     frame: bytes,
     event: dict[str, Any],
 ) -> None:
+    camera_id = str(camera["id"])
+    stats = frame_stats.setdefault(camera_id, {"received": 0})
+    stats["last_report_status"] = "sending"
+    stats["last_report_error"] = None
     if not EVENT_REPORT_URL or not SUPABASE_ANON_KEY:
+        stats["last_report_status"] = "not_configured"
         print("Event confirmed locally, but event reporting is not configured.")
         return
     payload = {
@@ -233,8 +254,14 @@ def report_confirmed_event(
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             result = json.loads(response.read().decode("utf-8"))
+            stats["last_report_status"] = "reported"
+            stats["last_report_event_id"] = result.get("eventId")
+            stats["last_report_at"] = time.time()
             print(f"Reported incident {result.get('eventId', 'unknown')}.")
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as error:
+        stats["last_report_status"] = "failed"
+        stats["last_report_error"] = str(error)
+        stats["last_report_at"] = time.time()
         print(f"Incident reporting failed: {error}")
 
 
@@ -263,6 +290,18 @@ def evaluate_littering_events(
     candidate_statuses: list[dict[str, Any]] = []
     confirmed: list[dict[str, Any]] = []
     active_keys: set[str] = set()
+    remembered = recent_people.setdefault(camera_id, {})
+
+    for detection in detections:
+        if (
+            detection["label"].lower() == "person"
+            and detection["trackId"] is not None
+        ):
+            remembered[int(detection["trackId"])] = {
+                "trackId": int(detection["trackId"]),
+                "groundPoint": detection["groundPoint"],
+                "seenAt": now,
+            }
 
     for detection in detections:
         track_id = detection["trackId"]
@@ -277,11 +316,16 @@ def evaluate_littering_events(
             float(detection["groundPoint"]["y"]),
         )
         for zone in detection["zones"]:
-            key = f"{zone['id']}:{track_id}"
+            object_label = detection["label"].lower()
+            key = f"{zone['id']}:{object_label}"
             active_keys.add(key)
             candidate = candidates.get(key)
             if candidate is None:
-                person, person_distance = nearest_person(ground_point, detections)
+                person, person_distance, person_age = nearest_person(
+                    camera_id,
+                    ground_point,
+                    detections,
+                )
                 if (
                     person is None
                     or person_distance is None
@@ -293,10 +337,16 @@ def evaluate_littering_events(
                     "lastPoint": ground_point,
                     "personTrackId": person["trackId"],
                     "personDistance": person_distance,
+                    "personAge": person_age,
+                    "initialTrackId": track_id,
+                    "currentTrackId": track_id,
                     "maxConfidence": float(detection["confidence"]),
                     "stationary": True,
+                    "lastSeenAt": now,
                 }
                 candidates[key] = candidate
+            candidate["lastSeenAt"] = now
+            candidate["currentTrackId"] = track_id
             movement = normalized_distance(candidate["lastPoint"], ground_point)
             candidate["lastPoint"] = ground_point
             candidate["maxConfidence"] = max(
@@ -317,6 +367,7 @@ def evaluate_littering_events(
                     "zoneId": zone["id"],
                     "zoneName": zone["name"],
                     "personTrackId": candidate["personTrackId"],
+                    "personAgeSeconds": round(float(candidate["personAge"]), 1),
                     "stationary": candidate["stationary"],
                     "elapsedSeconds": round(elapsed, 1),
                     "requiredSeconds": confirmation_seconds,
@@ -324,7 +375,7 @@ def evaluate_littering_events(
                 }
             )
             cooldown_key = (
-                f"{camera_id}:{zone['id']}:{detection['label'].lower()}:{track_id}"
+                f"{camera_id}:{zone['id']}:{object_label}"
             )
             if (
                 candidate["stationary"]
@@ -344,22 +395,29 @@ def evaluate_littering_events(
                         "confidence": round(float(candidate["maxConfidence"]), 4),
                         "capturedAt": captured_at,
                         "metadata": {
-                            "waste_track_id": track_id,
+                            "waste_track_id": candidate["initialTrackId"],
+                            "latest_waste_track_id": candidate["currentTrackId"],
                             "person_track_id": candidate["personTrackId"],
                             "person_distance": round(
                                 float(candidate["personDistance"]),
                                 5,
                             ),
+                            "person_age_seconds": round(
+                                float(candidate["personAge"]),
+                                2,
+                            ),
                             "confirmation_seconds": confirmation_seconds,
                             "stationary_threshold": EVENT_STATIONARY_DISTANCE,
-                            "association_rule": "nearby_person_then_stationary_waste",
+                            "association_rule": "recent_nearby_person_then_stationary_waste",
                         },
                     }
                 )
                 candidates.pop(key, None)
 
     for stale_key in set(candidates) - active_keys:
-        candidates.pop(stale_key, None)
+        candidate = candidates[stale_key]
+        if now - float(candidate.get("lastSeenAt", now)) > EVENT_CANDIDATE_GRACE_SECONDS:
+            candidates.pop(stale_key, None)
     return candidate_statuses, confirmed
 
 
@@ -460,6 +518,7 @@ def process_frame(
                 conf=MODEL_CONFIDENCE,
                 imgsz=MODEL_IMAGE_SIZE,
                 device=MODEL_DEVICE,
+                end2end=False,
                 max_det=100,
                 verbose=False,
             )[0]
@@ -563,6 +622,9 @@ def process_frame(
             "width": width,
             "height": height,
             "bytes": len(frame),
+            "labels": [detection["label"] for detection in detections],
+            "restricted_zone_count": len(zones),
+            "violation_count": len(violations),
         }
     )
     candidates, confirmed_events = evaluate_littering_events(
@@ -570,6 +632,8 @@ def process_frame(
         detections,
         captured_at,
     )
+    stats["event_candidate_count"] = len(candidates)
+    stats["confirmed_event_count"] = len(confirmed_events)
     for event in confirmed_events:
         start_event_report(camera, token, frame, event)
     return {
@@ -644,10 +708,55 @@ class Handler(BaseHTTPRequestHandler):
                     "confidence": MODEL_CONFIDENCE,
                     "classFilter": sorted(configured_classes),
                     "wasteClasses": sorted(WASTE_CLASSES),
+                    "eventRules": {
+                        "personDistance": EVENT_PERSON_DISTANCE,
+                        "personMemorySeconds": EVENT_PERSON_MEMORY_SECONDS,
+                        "candidateGraceSeconds": EVENT_CANDIDATE_GRACE_SECONDS,
+                        "stationaryDistance": EVENT_STATIONARY_DISTANCE,
+                    },
                     "eventReportingReady": bool(
                         EVENT_REPORT_URL and SUPABASE_ANON_KEY
                     ),
                     "activeCameras": len(frame_stats),
+                    "cameraDiagnostics": [
+                        {
+                            "cameraId": camera_id,
+                            "frameNumber": stats.get("received", 0),
+                            "frameAgeSeconds": round(
+                                max(
+                                    0.0,
+                                    time.time()
+                                    - float(stats.get("last_received_at", time.time())),
+                                ),
+                                1,
+                            ),
+                            "labels": stats.get("labels", []),
+                            "restrictedZoneCount": stats.get(
+                                "restricted_zone_count",
+                                0,
+                            ),
+                            "violationCount": stats.get("violation_count", 0),
+                            "eventCandidateCount": stats.get(
+                                "event_candidate_count",
+                                0,
+                            ),
+                            "confirmedEventCount": stats.get(
+                                "confirmed_event_count",
+                                0,
+                            ),
+                            "lastReportStatus": stats.get(
+                                "last_report_status",
+                                "none",
+                            ),
+                            "lastReportEventId": stats.get(
+                                "last_report_event_id",
+                            ),
+                            "lastReportError": stats.get(
+                                "last_report_error",
+                            ),
+                        }
+                        for camera_id, stats in frame_stats.items()
+                    ],
                 },
             )
             return

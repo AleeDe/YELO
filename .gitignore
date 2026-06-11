@@ -3,6 +3,7 @@ node_modules/
 .next/
 out/
 dist/
+artifacts/*.apk
 
 # Environment files
 .env
