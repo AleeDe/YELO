@@ -7,10 +7,14 @@ import {
   AlertCircle,
   ArrowLeft,
   Camera,
+  Check,
+  CheckCircle2,
   ChevronDown,
+  Clipboard,
   Clock3,
   Edit3,
   ExternalLink,
+  KeyRound,
   LoaderCircle,
   Trash2,
   Wifi,
@@ -126,6 +130,7 @@ export default function CameraDetailPage() {
   const router = useRouter();
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
+  const tokenDialogRef = useRef<HTMLDialogElement>(null);
   const liveVideoRef = useRef<HTMLVideoElement>(null);
   const [camera, setCamera] = useState<CameraDetail | null>(null);
   const [form, setForm] = useState<EditForm | null>(null);
@@ -138,6 +143,9 @@ export default function CameraDetailPage() {
   const [liveFrameUrl, setLiveFrameUrl] = useState("");
   const [previewClock, setPreviewClock] = useState(() => Date.now());
   const [webRtcState, setWebRtcState] = useState<WebRtcState>("waiting");
+  const [rotating, setRotating] = useState(false);
+  const [rotatedToken, setRotatedToken] = useState("");
+  const [tokenCopied, setTokenCopied] = useState(false);
   const canManage = auth.role === "super_admin" || auth.role === "society_admin";
   const cameraId = camera?.id ?? null;
   const cameraSocietyId = camera?.society_id ?? null;
@@ -261,6 +269,36 @@ export default function CameraDetailPage() {
     router.replace("/cameras");
   }
 
+  async function rotateToken() {
+    if (!auth.client || !camera) return;
+    setRotating(true);
+    setError("");
+    const { data, error: rotateError } = await auth.client.functions.invoke(
+      "rotate-camera-token",
+      { body: { cameraId: camera.id } },
+    );
+    setRotating(false);
+    if (rotateError || !data?.deviceToken) {
+      let message = rotateError?.message ?? "The token could not be regenerated.";
+      if (rotateError && "context" in rotateError && rotateError.context instanceof Response) {
+        const response = await rotateError.context.json().catch(() => null);
+        message = response?.error ?? message;
+      }
+      setError(message);
+      return;
+    }
+    setRotatedToken(data.deviceToken);
+    setTokenCopied(false);
+    setCamera((current) => current ? { ...current, status: "pending", last_seen_at: null } : current);
+    tokenDialogRef.current?.showModal();
+  }
+
+  async function copyRotatedToken() {
+    await navigator.clipboard.writeText(rotatedToken);
+    setTokenCopied(true);
+    window.setTimeout(() => setTokenCopied(false), 2500);
+  }
+
   if (loading) return <div className="directory-state" role="status"><LoaderCircle className="spin" size={24} /><p>Loading camera...</p></div>;
   if (!camera) return <div className="directory-state"><Camera size={28} /><h1>Camera not found</h1><p>{error || "This camera does not exist or your account cannot access it."}</p><Link href="/cameras" className="secondary-button focus-ring">Back to cameras</Link></div>;
 
@@ -293,6 +331,7 @@ export default function CameraDetailPage() {
         <div><p className="eyebrow">{camera.id.slice(0, 8)}</p><h1>{camera.name}</h1><p className="page-subtitle">{camera.location_label || "No location label"} · {sourceLabels[camera.source_type]}</p></div>
         <div className="camera-heading-actions">
           <StatusPill status={status} />
+          {canManage && <button className="secondary-button focus-ring" type="button" disabled={rotating} onClick={() => void rotateToken()}>{rotating ? <LoaderCircle className="spin" size={18} /> : <KeyRound size={18} />}{rotating ? "Generating..." : "Regenerate token"}</button>}
           {canManage && <button className="secondary-button focus-ring" type="button" onClick={openEditDialog}><Edit3 size={18} /> Camera settings</button>}
         </div>
       </div>
@@ -420,6 +459,15 @@ export default function CameraDetailPage() {
           <div className="camera-dialog-danger"><div><strong>Remove this camera</strong><p>Deleting also removes its incident history and zones.</p></div><button className="danger-button focus-ring" type="button" disabled={saving} onClick={() => { editDialogRef.current?.close(); setDeleteConfirmation(""); setError(""); deleteDialogRef.current?.showModal(); }}><Trash2 size={17} /> Delete camera</button></div>
           <div className="dialog-actions"><button className="secondary-button focus-ring" type="button" disabled={saving} onClick={() => editDialogRef.current?.close()}>Cancel</button><button className="primary-button focus-ring" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={18} /> : <Edit3 size={18} />}{saving ? "Saving..." : "Save changes"}</button></div>
         </form>}
+      </dialog>
+
+      <dialog ref={tokenDialogRef} className="form-dialog" onClick={(event) => { if (event.target === tokenDialogRef.current) tokenDialogRef.current?.close(); }}>
+        <div className="dialog-card">
+          <div className="dialog-heading"><div><p className="eyebrow">New device token</p><h2>Save the device token</h2><p>This token is shown only once. The previous token no longer works.</p></div><button className="icon-button focus-ring" type="button" aria-label="Close token dialog" onClick={() => tokenDialogRef.current?.close()}><X size={20} /></button></div>
+          <div className="device-token-box"><code>{rotatedToken}</code><button className="secondary-button focus-ring" type="button" onClick={() => void copyRotatedToken()}>{tokenCopied ? <Check size={18} /> : <Clipboard size={18} />}{tokenCopied ? "Copied" : "Copy token"}</button></div>
+          <div className="auth-notice warning"><AlertCircle size={20} /><div><strong>Re-pair the camera</strong><p>Enter this token in the capture client (mobile or webcam) to reconnect this camera. The camera is now pending until it pairs again.</p></div></div>
+          <div className="dialog-actions"><button className="secondary-button focus-ring" type="button" onClick={() => tokenDialogRef.current?.close()}>Done</button><Link href={`/capture?returnTo=${encodeURIComponent(`/cameras/view?id=${camera.id}`)}`} className="primary-button focus-ring">Connect device <ExternalLink size={17} /></Link></div>
+        </div>
       </dialog>
 
       <dialog ref={deleteDialogRef} className="form-dialog delete-dialog" onCancel={(event) => { if (deleting) event.preventDefault(); }} onClick={(event) => { if (event.target === deleteDialogRef.current && !deleting) deleteDialogRef.current?.close(); }}>
