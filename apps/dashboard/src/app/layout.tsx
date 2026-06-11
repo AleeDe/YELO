@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { AnimatedSplash } from "@/components/animated-splash";
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider } from "@/components/auth-provider";
 import "./globals.css";
@@ -23,6 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body>
+        <AnimatedSplash />
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>
