@@ -16,6 +16,45 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 
+def _load_env_files() -> None:
+    """Populate the environment from local .env files so the gateway works
+    without manually exporting variables on every launch.
+
+    Looks first at services/inference/.env, then falls back to the dashboard's
+    .env.local (mapping NEXT_PUBLIC_SUPABASE_* to the names this server uses).
+    Existing environment variables always take precedence."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.normpath(os.path.join(here, "..", ".."))
+    alias = {
+        "NEXT_PUBLIC_SUPABASE_URL": "SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY": "SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_YELO_INFERENCE_URL": "YELO_INFERENCE_URL",
+    }
+    for candidate in (
+        os.path.join(here, ".env"),
+        os.path.join(repo_root, "apps", "dashboard", ".env.local"),
+    ):
+        if not os.path.exists(candidate):
+            continue
+        try:
+            with open(candidate, "r", encoding="utf-8") as handle:
+                for raw in handle:
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    for name in (key, alias.get(key)):
+                        if name and name not in os.environ:
+                            os.environ[name] = value
+        except OSError:
+            pass
+
+
+_load_env_files()
+
+
 HOST = os.getenv("YELO_INFERENCE_HOST", "0.0.0.0")
 PORT = int(os.getenv("YELO_INFERENCE_PORT", "8000"))
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
