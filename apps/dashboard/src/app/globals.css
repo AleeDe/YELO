@@ -1779,6 +1779,14 @@ h3 {
   display: block;
 }
 
+/* Stop the browser's native image/video drag from hijacking the pan gesture. */
+.zoom-frame-content img,
+.zoom-frame-content video {
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .zoom-toolbar {
   position: absolute;
   top: 10px;
