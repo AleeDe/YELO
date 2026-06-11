@@ -27,8 +27,15 @@ const iceServers: RTCIceServer[] = [
   { urls: "stun:stun1.l.google.com:19302" },
 ];
 if (turnUrl) {
+  // turnUrl may be a single URL or a comma-separated list of transports
+  // (e.g. udp:3478, tcp:3478, tls:443) so the relay can punch through
+  // restrictive NATs and firewalls when the peers are on different networks.
+  const turnUrls = turnUrl
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
   iceServers.push({
-    urls: turnUrl,
+    urls: turnUrls.length > 1 ? turnUrls : turnUrls[0],
     username: turnUsername,
     credential: turnCredential,
   });
