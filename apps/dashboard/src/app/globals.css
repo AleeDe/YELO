@@ -5604,7 +5604,7 @@ h3 {
 
 .zone-manager-header > div > p:last-child {
   margin-top: 6px;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .zone-workspace {
@@ -5638,7 +5638,7 @@ h3 {
 .zone-canvas-toolbar small,
 .zone-editor-controls p,
 .zone-point-review p {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .zone-canvas-toolbar > span {
@@ -5755,7 +5755,7 @@ h3 {
 .zone-drawing-hint {
   position: absolute;
   z-index: 1;
-  bottom: 14px;
+  top: 14px;
   left: 50%;
   display: inline-flex;
   min-height: 38px;
@@ -5809,23 +5809,26 @@ h3 {
 
 .zone-point-review ol {
   display: grid;
-  gap: 7px;
-  max-height: 240px;
+  gap: 8px;
+  max-height: 304px;
   margin: 0;
-  padding: 0;
+  padding: 2px 8px 2px 2px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   list-style: none;
 }
 
 .zone-point-review li {
   display: grid;
-  grid-template-columns: 32px 1fr 44px;
+  grid-template-columns: 30px minmax(0, 1fr) 44px;
   align-items: center;
-  gap: 9px;
-  min-height: 44px;
-  padding: 4px 4px 4px 7px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 5px 5px 5px 9px;
   border: 1px solid var(--border);
   border-radius: 12px;
+  background: white;
 }
 
 .zone-point-review li.selected {
@@ -5863,7 +5866,7 @@ h3 {
 
 .zone-point-select small {
   overflow: hidden;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5937,7 +5940,7 @@ h3 {
 .zone-empty-state p,
 .zone-list p {
   margin-top: 3px;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .zone-list {
