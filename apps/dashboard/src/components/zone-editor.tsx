@@ -56,6 +56,7 @@ export function ZoneEditor({
   const [pointX, setPointX] = useState("50");
   const [pointY, setPointY] = useState("50");
   const [referenceImage, setReferenceImage] = useState("");
+  const [referenceAspect, setReferenceAspect] = useState<number | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -67,6 +68,27 @@ export function ZoneEditor({
     },
     [referenceImage],
   );
+
+  // The drawing surface must take the reference image's exact aspect ratio,
+  // otherwise normalized coordinates drawn here land somewhere else on the
+  // real camera frame (e.g. a portrait phone stream inside a wide canvas).
+  useEffect(() => {
+    if (!referenceImage) {
+      setReferenceAspect(null);
+      return;
+    }
+    let active = true;
+    const probe = new window.Image();
+    probe.onload = () => {
+      if (active && probe.naturalWidth > 0 && probe.naturalHeight > 0) {
+        setReferenceAspect(probe.naturalWidth / probe.naturalHeight);
+      }
+    };
+    probe.src = referenceImage;
+    return () => {
+      active = false;
+    };
+  }, [referenceImage]);
 
   function openNewZone() {
     setEditing(true);
@@ -324,11 +346,17 @@ export function ZoneEditor({
               tabIndex={0}
               onPointerDown={addPoint}
               aria-label="Restricted-zone drawing area. Tap empty space to add a point. Drag numbered handles to move them."
-              style={
-                referenceImage
-                  ? { backgroundImage: `url("${referenceImage}")` }
-                  : undefined
-              }
+              style={{
+                ...(referenceImage ? { backgroundImage: `url("${referenceImage}")` } : {}),
+                ...(referenceAspect
+                  ? {
+                      aspectRatio: String(referenceAspect),
+                      width: `min(100%, calc(64vh * ${referenceAspect}))`,
+                      minHeight: 0,
+                      marginInline: "auto",
+                    }
+                  : {}),
+              }}
             >
               {!referenceImage && (
                 <span className="zone-reference-empty">
