@@ -38,9 +38,9 @@ export default function LegalPage() {
 
         <h3>3. How camera video is handled</h3>
         <ul>
-          <li>Detection frames are processed <strong>in memory</strong> and are not stored as continuous video.</li>
+          <li>Detection frames are processed <strong>in memory</strong> and are not stored as continuous video. A short rolling window (about one minute) is kept in memory only, and is discarded unless an event is confirmed.</li>
           <li>One private preview frame per camera is kept for live monitoring and is <strong>overwritten roughly every two seconds</strong>.</li>
-          <li>Only the evidence image of a <strong>confirmed littering event</strong> is retained, in private storage accessible to authorised society staff.</li>
+          <li>For a <strong>confirmed littering event</strong>, YELO retains the evidence image and a short clip covering roughly <strong>one minute before and one minute after</strong> the event, so reviewers can see the person involved. Both are kept in private storage accessible to authorised society staff.</li>
           <li>Camera device tokens are stored only as <strong>SHA-256 hashes</strong>; YELO cannot read the original token after it is shown once.</li>
         </ul>
 

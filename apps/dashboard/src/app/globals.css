@@ -1740,6 +1740,26 @@ h3 {
   color: #093627;
 }
 
+.evidence-clip {
+  border-bottom: 1px solid var(--border);
+  background: #102019;
+}
+
+.evidence-clip video {
+  display: block;
+  width: 100%;
+  max-height: min(70vh, 620px);
+  background: #102019;
+}
+
+.evidence-clip-note {
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
 .timeline-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
