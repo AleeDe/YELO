@@ -487,7 +487,7 @@ def capture_event_clip(
         with urllib.request.urlopen(request, timeout=60) as response:
             json.loads(response.read().decode("utf-8"))
             stats["last_clip_status"] = "uploaded"
-            print(f"Uploaded {len(frames)}-frame evidence clip ({len(data)} bytes).")
+            print(f"Uploaded {len(samples)}-frame evidence clip ({len(data)} bytes).")
     except urllib.error.HTTPError as error:
         detail = ""
         try:
