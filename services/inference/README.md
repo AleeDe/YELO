@@ -33,7 +33,7 @@ NEXT_PUBLIC_YELO_INFERENCE_URL=http://192.168.1.3:8000
 Restart the Next.js development server and rebuild/sync Capacitor after changing
 this value. Windows Firewall must allow Python on private networks.
 
-By default, the gateway loads the small `yolo26n.pt` model on CPU. The first
+By default, the gateway loads the higher-accuracy `yolo26m.pt` model on CPU. The first
 run may download the public model weights. Configure another model with:
 
 ```powershell
@@ -45,8 +45,8 @@ Use your Colab-trained `best.pt` file here when it is ready. Other controls:
 
 ```text
 YELO_MODEL_DEVICE=cpu
-YELO_MODEL_CONFIDENCE=0.35
-YELO_MODEL_IMAGE_SIZE=640
+YELO_MODEL_CONFIDENCE=0.2
+YELO_MODEL_IMAGE_SIZE=960
 YELO_DETECTION_CLASSES=person,bottle,cup
 YELO_TRACKER_CONFIG=bytetrack.yaml
 YELO_TRACKER_STALE_SECONDS=120
@@ -71,7 +71,9 @@ Event controls:
 
 ```text
 YELO_EVENT_STATIONARY_DISTANCE=0.015
-YELO_EVENT_PERSON_DISTANCE=0.3
+YELO_EVENT_PERSON_DISTANCE=0.75
+YELO_EVENT_PERSON_MEMORY_SECONDS=15
+YELO_EVENT_CANDIDATE_GRACE_SECONDS=12
 YELO_EVENT_COOLDOWN_SECONDS=120
 YELO_WASTE_CLASSES=bottle,cup,bowl,banana,apple,orange,backpack,handbag,suitcase
 ```

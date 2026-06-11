@@ -79,6 +79,8 @@ incident review, and realtime notification.
 
 - The public COCO model recognizes common objects such as bottles and cups but
   is not a complete garbage model.
+- Recorded-video ingestion is deferred; the working demo sources are mobile
+  cameras and webcams.
 - Direct WebRTC can fail on restrictive NAT or firewall configurations without
   a TURN relay.
 - Camera capture can stop when a mobile browser is backgrounded.
