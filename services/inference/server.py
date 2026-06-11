@@ -24,7 +24,15 @@ MAX_FRAME_BYTES = 2 * 1024 * 1024
 # Camera config (zones, confirmation delay) refreshes when this expires, so
 # keep it short enough that restricted-zone edits reach detection quickly.
 TOKEN_CACHE_SECONDS = int(os.getenv("YELO_TOKEN_CACHE_SECONDS", "10"))
-MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26m.pt")
+MODEL_PATH = os.getenv("YELO_MODEL_PATH", "yolo26l.pt")
+# Weights live at the repository root; resolve them regardless of the
+# directory the gateway is launched from.
+if not os.path.isabs(MODEL_PATH) and not os.path.exists(MODEL_PATH):
+    _repo_root_candidate = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", MODEL_PATH)
+    )
+    if os.path.exists(_repo_root_candidate):
+        MODEL_PATH = _repo_root_candidate
 MODEL_DEVICE = os.getenv("YELO_MODEL_DEVICE", "cpu")
 MODEL_CONFIDENCE = float(os.getenv("YELO_MODEL_CONFIDENCE", "0.2"))
 MODEL_IMAGE_SIZE = int(os.getenv("YELO_MODEL_IMAGE_SIZE", "960"))
