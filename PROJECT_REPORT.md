@@ -718,7 +718,7 @@ adequate for live input on CPU hardware.
 
 | Item | Location |
 |---|---|
-| Source code | Project repository |
+| Source code | `04_Source_Code/` in the submission package, and on GitHub at **https://github.com/AleeDe/YELO** (full commit history) |
 | Trained model | `models/yolo_garbage.pt` |
 | Training notebook (with outputs) | `docs/colab_train_garbage.ipynb` |
 | Dataset | See `DATASET.md` for download link |

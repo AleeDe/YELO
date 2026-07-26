@@ -148,6 +148,14 @@ GROUP MEMBERS
 4. Arhum Farooq               B23110006017
 5. Sami Ullah                 B23110006146
 
+SOURCE CODE REPOSITORY
+----------------------
+https://github.com/AleeDe/YELO
+
+The full source is included in this package (04_Source_Code/), and is also
+on GitHub with the complete commit history showing how the project was
+developed week by week.
+
 
 WHAT IS IN THIS PACKAGE
 -----------------------
@@ -173,6 +181,14 @@ WHAT IS IN THIS PACKAGE
     services/inference/         Python inference gateway (the AI service)
     apps/dashboard/             Next.js review dashboard
     supabase/                   Database schema and edge functions
+
+    The complete source is also on GitHub, including the full commit
+    history of the project (56+ commits across four weeks):
+
+        https://github.com/AleeDe/YELO
+
+    Build output (node_modules, .next, android build files) is excluded
+    from this archive to keep it small.
 
 05_Documentation/
     DATABASE_DESIGN.md          Database schema design

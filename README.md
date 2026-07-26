@@ -14,6 +14,8 @@ evidence.
 >
 > Full report: [`PROJECT_REPORT.md`](PROJECT_REPORT.md) |
 > AI declaration: [`AI_USAGE_DECLARATION.md`](AI_USAGE_DECLARATION.md)
+>
+> Repository: https://github.com/AleeDe/YELO
 
 ---
 

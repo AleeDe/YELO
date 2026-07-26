@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YELO - AI-Assisted Littering Detection</title>
+<meta name="description" content="AI-assisted littering detection using YOLOv8 and ByteTrack. CS-551 Artificial Intelligence, University of Karachi.">
+<style>
+  :root {
+    --bg: #0b0f14;
+    --surface: #131a22;
+    --surface-2: #1a232d;
+    --line: #26313d;
+    --text: #e8eef5;
+    --muted: #93a4b8;
+    --accent: #2ecc71;
+    --accent-dim: #22a35a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- Hero ---- */
+  header {
+    padding: 72px 0 56px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%,
+        rgba(46, 204, 113, 0.10), transparent 70%);
+  }
+  .badge {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid rgba(46, 204, 113, 0.35);
+    border-radius: 100px;
+    padding: 5px 14px;
+    margin-bottom: 22px;
+  }
+  h1 {
+    font-size: clamp(38px, 7vw, 62px);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+  h1 .accent { color: var(--accent); }
+  .tagline {
+    font-size: clamp(16px, 2.4vw, 20px);
+    color: var(--muted);
+    max-width: 620px;
+    margin: 0 auto 34px;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 13px 26px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform .12s ease, background .15s ease, border-color .15s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color: #06120a; }
+  .btn-primary:hover { background: #3cdd80; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--line);
+  }
+  .btn-ghost:hover { border-color: var(--muted); background: var(--surface); }
+  .btn-sub { font-weight: 400; font-size: 12px; opacity: .75; }
+
+  /* ---- Sections ---- */
+  section { padding: 62px 0; border-bottom: 1px solid var(--line); }
+  h2 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+  }
+  .section-sub { color: var(--muted); margin-bottom: 30px; max-width: 640px; }
+
+  /* ---- Metrics ---- */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px 20px;
+    text-align: center;
+  }
+  .metric .val {
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric .lbl {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-top: 5px;
+  }
+
+  /* ---- Steps / pipeline ---- */
+  .steps { display: grid; gap: 12px; }
+  .step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 16px;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .step .n {
+    width: 30px; height: 30px;
+    display: grid; place-items: center;
+    border-radius: 8px;
+    background: rgba(46, 204, 113, 0.12);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .step h3 { font-size: 16px; margin-bottom: 3px; }
+  .step p { color: var(--muted); font-size: 14.5px; }
+
+  /* ---- Rule table ---- */
+  .rule {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .rule-row {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 14px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    align-items: center;
+  }
+  .rule-row:last-child { border-bottom: none; }
+  .rule-row .tick { color: var(--accent); font-weight: 700; }
+  .rule-row span { font-size: 14.5px; }
+
+  .verdict {
+    margin-top: 18px;
+    padding: 18px 20px;
+    background: rgba(46, 204, 113, 0.07);
+    border: 1px solid rgba(46, 204, 113, 0.25);
+    border-radius: 12px;
+    font-size: 15px;
+  }
+  .verdict strong { color: var(--accent); }
+
+  /* ---- Spec grid ---- */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px;
+  }
+  .card h3 { font-size: 15px; margin-bottom: 12px; }
+  .kv { display: flex; justify-content: space-between; gap: 12px;
+        padding: 7px 0; border-bottom: 1px solid var(--surface-2);
+        font-size: 14px; }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { color: var(--muted); }
+  .kv .v { font-weight: 600; text-align: right; }
+
+  /* ---- Team ---- */
+  .team { display: grid; gap: 8px; }
+  .member {
+    display: flex; justify-content: space-between; gap: 14px;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 14.5px;
+  }
+  .member .roll { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .member .role { color: var(--muted); font-size: 13px; flex-basis: 100%; }
+
+  footer {
+    padding: 44px 0 60px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  .note {
+    font-size: 13px;
+    color: var(--muted);
+    background: var(--surface);
+    border-left: 3px solid var(--accent-dim);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 18px;
+  }
+
+  code {
+    background: var(--surface-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+
+  @media (max-width: 560px) {
+    header { padding: 52px 0 40px; }
+    section { padding: 46px 0; }
+    .step { grid-template-columns: 32px 1fr; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="badge">CS-551 Artificial Intelligence &middot; University of Karachi</div>
+    <h1>YE<span class="accent">L</span>O</h1>
+    <p class="tagline">
+      An AI system that does not just detect litter &mdash; it detects the moment
+      somebody drops it.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/AleeDe/YELO/releases/latest/download/YELO-v1.0.0.apk">
+        Download APK
+        <span class="btn-sub">5.4 MB &middot; Android</span>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/AleeDe/YELO">View Source</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>Model performance</h2>
+    <p class="section-sub">
+      YOLOv8-small fine-tuned on the TACO dataset. Measured on the validation
+      split.
+    </p>
+    <div class="metrics">
+      <div class="metric"><div class="val">0.513</div><div class="lbl">mAP@0.5</div></div>
+      <div class="metric"><div class="val">0.366</div><div class="lbl">mAP@0.5:0.95</div></div>
+      <div class="metric"><div class="val">0.713</div><div class="lbl">Precision</div></div>
+      <div class="metric"><div class="val">0.436</div><div class="lbl">Recall</div></div>
+      <div class="metric"><div class="val">75<span style="font-size:18px">ms</span></div><div class="lbl">CPU inference</div></div>
+    </div>
+    <div class="note">
+      Recall of 0.436 is the weaker figure, and deliberately so. A missed frame
+      is not a missed event &mdash; the system observes each scene many times per
+      second. A false alarm, by contrast, wastes a reviewer's time and erodes
+      trust in the system.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>How a frame becomes an incident</h2>
+    <p class="section-sub">
+      Detection alone is not enough. A bottle in a bin is not littering.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <div>
+          <h3>Detect</h3>
+          <p>YOLOv8 finds litter and people in the frame, with confidence scores.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div>
+          <h3>Track</h3>
+          <p>ByteTrack assigns a persistent ID to each object, so the system can
+             ask whether it moved and how long it has been there.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div>
+          <h3>Locate</h3>
+          <p>The bottom-centre of each box &mdash; the ground contact point &mdash;
+             is tested against the restricted zone polygon.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">4</div>
+        <div>
+          <h3>Decide</h3>
+          <p>Five conditions must all hold before an incident is raised.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">5</div>
+        <div>
+          <h3>Evidence</h3>
+          <p>A photo and a 60-second before/after clip are saved. Every other
+             frame is discarded.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>The event rule</h2>
+    <p class="section-sub">All five conditions are required.</p>
+    <div class="rule">
+      <div class="rule-row"><span class="tick">1</span><span>Detection confidence above threshold</span></div>
+      <div class="rule-row"><span class="tick">2</span><span>Object lies inside an active restricted zone</span></div>
+      <div class="rule-row"><span class="tick">3</span><span>A person was tracked nearby recently</span></div>
+      <div class="rule-row"><span class="tick">4</span><span>The object has stopped moving</span></div>
+      <div class="rule-row"><span class="tick">5</span><span>It stays still past the confirmation delay</span></div>
+    </div>
+    <div class="verdict">
+      A bottle in a bin &rarr; no person nearby, <strong>no alert</strong>.<br>
+      Someone carrying a bottle &rarr; it keeps moving, <strong>no alert</strong>.<br>
+      A one-frame false detection &rarr; gone next frame, <strong>no alert</strong>.<br>
+      Someone drops a bottle and walks away &rarr; <strong>alert raised</strong>.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Technical details</h2>
+    <div class="grid-2" style="margin-top: 26px;">
+      <div class="card">
+        <h3>Model</h3>
+        <div class="kv"><span class="k">Architecture</span><span class="v">YOLOv8s</span></div>
+        <div class="kv"><span class="k">Parameters</span><span class="v">11.14 M</span></div>
+        <div class="kv"><span class="k">Method</span><span class="v">Transfer learning</span></div>
+        <div class="kv"><span class="k">Classes</span><span class="v">1 (trash)</span></div>
+        <div class="kv"><span class="k">Tracker</span><span class="v">ByteTrack</span></div>
+      </div>
+      <div class="card">
+        <h3>Training</h3>
+        <div class="kv"><span class="k">Dataset</span><span class="v">TACO v16</span></div>
+        <div class="kv"><span class="k">Images</span><span class="v">~3,597</span></div>
+        <div class="kv"><span class="k">Epochs</span><span class="v">50</span></div>
+        <div class="kv"><span class="k">Image size</span><span class="v">640</span></div>
+        <div class="kv"><span class="k">Hardware</span><span class="v">Colab T4 GPU</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Team</h2>
+    <p class="section-sub">
+      Department of Computer Science, University of Karachi (BSCS) &middot;
+      Instructor: Sir Rana Zaeem Tariq
+    </p>
+    <div class="team">
+      <div class="member">
+        <span><strong>Muhammad Ali</strong> &middot; Team Lead</span>
+        <span class="roll">B23110006087</span>
+        <span class="role">Model training and event-detection algorithm design</span>
+      </div>
+      <div class="member">
+        <span><strong>Muneeb Roshan</strong></span>
+        <span class="roll">B23110006125</span>
+        <span class="role">Dataset engineering and augmentation strategy</span>
+      </div>
+      <div class="member">
+        <span><strong>Abdur Rahman</strong></span>
+        <span class="roll">B23110006005</span>
+        <span class="role">Multi-object tracking and track-identity logic</span>
+      </div>
+      <div class="member">
+        <span><strong>Arhum Farooq</strong></span>
+        <span class="roll">B23110006017</span>
+        <span class="role">Model evaluation, benchmarking, threshold tuning</span>
+      </div>
+      <div class="member">
+        <span><strong>Sami Ullah</strong></span>
+        <span class="roll">B23110006146</span>
+        <span class="role">Inference pipeline and deployment testing</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="border-bottom: none;">
+  <div class="wrap">
+    <h2>Installing the app</h2>
+    <p class="section-sub">
+      The APK is unsigned, so Android will warn before installing.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <div><h3>Download</h3><p>Tap the Download APK button above on an Android device.</p></div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div><h3>Allow the install</h3><p>When prompted, enable <code>Install unknown apps</code> for your browser.</p></div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div><h3>Pair a camera</h3><p>Sign in, then pair the device with a camera token from the dashboard.</p></div>
+      </div>
+    </div>
+    <div class="note">
+      The app sends frames to an inference gateway that runs on our own laptop.
+      It is only reachable while that machine is running &mdash; please contact us
+      to arrange a live demonstration.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="https://github.com/AleeDe/YELO">Source code</a> &middot;
+      <a href="https://github.com/AleeDe/YELO/blob/main/PROJECT_REPORT.md">Project report</a> &middot;
+      <a href="https://github.com/AleeDe/YELO/blob/main/DATASET.md">Dataset</a> &middot;
+      <a href="https://github.com/AleeDe/YELO/blob/main/AI_USAGE_DECLARATION.md">AI declaration</a>
+    </p>
+    <p style="margin-top: 14px;">
+      CS-551 Artificial Intelligence &middot; University of Karachi &middot; July 2026
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
