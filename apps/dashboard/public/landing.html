@@ -351,8 +351,33 @@
     html { scroll-behavior: auto; }
   }
   @media (max-width: 560px) {
-    header { padding: 64px 0 56px; }
-    section { padding: 54px 0; }
+    .wrap { padding: 0 18px; }
+    header { padding: 56px 0 48px; }
+    section { padding: 50px 0; }
+    h1 { font-size: clamp(34px, 11vw, 44px); }
+    .tagline { font-size: 15px; margin-bottom: 30px; }
+    .badge { font-size: 11px; padding: 5px 12px; }
+
+    /* Full-width tap targets */
+    .cta-row { flex-direction: column; align-items: stretch; }
+    .btn { justify-content: center; padding: 15px 20px; }
+
+    /* Metric tiles: two per row instead of a cramped auto-fit */
+    .metrics { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .metric { padding: 20px 12px 16px; }
+    .metric .val { font-size: 30px; }
+    .metric:last-child { grid-column: 1 / -1; }
+
+    .step { grid-template-columns: 40px 1fr; gap: 13px; }
+    .step:not(:last-child)::before { left: 15px; }
+    .step .n { width: 32px; height: 32px; font-size: 13.5px; }
+
+    .verdict-row { flex-direction: column; align-items: flex-start; gap: 7px; }
+    .punchline { font-size: 14.5px; padding: 16px 18px; }
+    .rule-row, .verdict-row { padding: 12px 16px; }
+    .card { padding: 20px 18px; }
+    .note { font-size: 13.5px; padding: 14px 16px; }
+    footer .links { gap: 14px; }
   }
 </style>
 </head>
