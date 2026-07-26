@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd apps/dashboard && npm install && npm run build && node ../../scripts/assemble-site.mjs",
+  "outputDirectory": "apps/dashboard/out",
+  "framework": null,
+  "cleanUrls": true,
+  "trailingSlash": true
+}
