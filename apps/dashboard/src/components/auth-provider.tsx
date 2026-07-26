@@ -33,7 +33,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 function destinationForRole(role: AppRole | null) {
   if (role === "super_admin") return "/super-admin";
   if (role === "operator") return "/operator";
-  return "/";
+  return "/dashboard";
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

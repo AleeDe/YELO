@@ -31,9 +31,9 @@ type Role = "society_admin" | "super_admin" | "operator";
 const roleConfig = {
   society_admin: {
     label: "Society administrator",
-    home: "/",
+    home: "/dashboard",
     navigation: [
-      { label: "Overview", icon: LayoutDashboard, href: "/" },
+      { label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
       { label: "Incidents", icon: AlertTriangle, href: "/incidents" },
       { label: "Cameras", icon: Video, href: "/cameras" },
       { label: "Analytics", icon: BarChart3, href: "/analytics" },

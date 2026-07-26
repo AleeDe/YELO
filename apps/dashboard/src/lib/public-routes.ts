@@ -14,5 +14,10 @@ export const PUBLIC_ROUTE_PREFIXES = [
 ] as const;
 
 export function isPublicRoute(pathname: string): boolean {
+  // "/" is public: in production it is the plain-HTML landing page, and in
+  // dev it is only a stub that forwards to /dashboard, where the auth guard
+  // takes over. Without this, the guard races the stub and sends signed-out
+  // visitors to /auth/sign-in?next=%2F instead of ?next=%2Fdashboard.
+  if (pathname === "/") return true;
   return PUBLIC_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }

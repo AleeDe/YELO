@@ -1,35 +1,34 @@
 /**
- * Assemble the deployed site after the Next.js static export.
+ * Post-build step: put the public landing page at the site root.
  *
- * Wanted layout:
+ * Deployed layout:
  *
- *   /       the public landing page (landing/index.html, plain HTML)
- *   /app    the dashboard
+ *   /            landing/index.html - plain HTML, no Next.js bundle
+ *   /dashboard   the signed-in overview (a real Next.js route)
  *
- * The dashboard exports its own home page to out/index.html, so this script
- * moves that page down to /app and puts the landing page at the root.
+ * The dashboard lives at /dashboard as an ordinary route, so the only work
+ * here is replacing the exported root page (a dev-only redirect stub) with
+ * the landing page.
  *
- * It runs as the package.json `postbuild` hook, which means it works no
- * matter how Vercel is configured: whether the project's Root Directory is
- * the repository root or apps/dashboard, `npm run build` always triggers it.
- * Everything it needs lives inside apps/dashboard.
+ * Runs as the package.json `postbuild` hook, so it fires after every
+ * `npm run build` regardless of where Vercel builds from. The Android build
+ * (cap:sync) calls `next build` directly to skip it - the APK's webview must
+ * start on the redirect stub, not the landing page.
  *
- * Why the landing page must be plain HTML with no Next.js bundle: the
- * dashboard's auth provider redirects any route outside the public list to
- * sign-in. If the landing page loaded the dashboard's JavaScript, visitors
- * would bounce straight to the login page.
+ * Why the landing page must carry no /_next/ reference: the dashboard's auth
+ * provider redirects any route outside the public list to sign-in, so if the
+ * landing page loaded the dashboard bundle, visitors would bounce straight
+ * to the login page.
  */
 
-import {
-  existsSync, mkdirSync, copyFileSync, readdirSync, statSync, readFileSync,
-} from "node:fs";
+import { existsSync, copyFileSync, readdirSync, statSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = join(here, "..");
 const outDir = join(appRoot, "out");
-const landingSrc = join(appRoot, "landing", "index.html");
+const landingSrc = join(appRoot, "public", "landing.html");
 
 function fail(message) {
   console.error(`assemble-site: ${message}`);
@@ -43,38 +42,12 @@ if (!existsSync(landingSrc)) {
   fail(`landing page not found: ${landingSrc}`);
 }
 
-const dashboardRoot = join(outDir, "index.html");
-const appDir = join(outDir, "app");
-
-if (!existsSync(dashboardRoot)) {
-  fail(`no ${dashboardRoot} found - did the Next.js export run?`);
-}
-
-// 1. Move the dashboard's exported root page to /app.
-//
-//    Guard against running twice over the same export: if out/index.html is
-//    already the landing page (no Next.js bundle), copying it into /app
-//    would overwrite the real dashboard page with the landing page.
-const rootHtml = readFileSync(dashboardRoot, "utf8");
-if (rootHtml.includes("/_next/")) {
-  mkdirSync(appDir, { recursive: true });
-  copyFileSync(dashboardRoot, join(appDir, "index.html"));
-  console.log("assemble-site: dashboard home -> /app/index.html");
-} else if (existsSync(join(appDir, "index.html"))) {
-  console.log("assemble-site: /app already assembled, leaving it alone");
-} else {
-  fail(
-    "out/index.html is not the dashboard export and /app/index.html is " +
-      "missing - run `npm run build` first",
-  );
-}
-
-// 2. Landing page becomes the new root.
-copyFileSync(landingSrc, dashboardRoot);
+// 1. Landing page replaces the exported root page.
+const rootPage = join(outDir, "index.html");
+copyFileSync(landingSrc, rootPage);
 console.log("assemble-site: landing page -> /index.html (no Next.js bundle)");
 
-// Sanity check: the landing page must not pull in the dashboard runtime.
-const landingHtml = readFileSync(dashboardRoot, "utf8");
+const landingHtml = readFileSync(rootPage, "utf8");
 if (landingHtml.includes("/_next/")) {
   fail(
     "landing page references /_next/ - the dashboard router would load and " +
@@ -83,17 +56,21 @@ if (landingHtml.includes("/_next/")) {
 }
 console.log("assemble-site: verified landing page has no /_next/ references");
 
-// 3. The reverse check: /app must be the dashboard, never the landing page.
-const appHtml = readFileSync(join(appDir, "index.html"), "utf8");
-if (!appHtml.includes("/_next/")) {
-  fail("/app/index.html has no Next.js bundle - the dashboard is missing");
+// 2. /dashboard must exist and be the real application.
+const dashboardPage = join(outDir, "dashboard", "index.html");
+if (!existsSync(dashboardPage)) {
+  fail("out/dashboard/index.html missing - the overview route did not export");
 }
-if (appHtml.includes("Download APK")) {
-  fail("/app/index.html looks like the landing page, not the dashboard");
+const dashboardHtml = readFileSync(dashboardPage, "utf8");
+if (!dashboardHtml.includes("/_next/")) {
+  fail("/dashboard/index.html has no Next.js bundle - the dashboard is missing");
 }
-console.log("assemble-site: verified /app serves the dashboard");
+if (dashboardHtml.includes("Download APK")) {
+  fail("/dashboard/index.html looks like the landing page, not the dashboard");
+}
+console.log("assemble-site: verified /dashboard serves the application");
 
-// 4. Report what is being served, as a build-log sanity check.
+// 3. Report what is being served, as a build-log sanity check.
 const entries = readdirSync(outDir)
   .filter((name) => statSync(join(outDir, name)).isDirectory())
   .sort();

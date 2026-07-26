@@ -8,12 +8,12 @@ It is deployed on **Vercel** together with the dashboard:
 | Route | Serves |
 |---|---|
 | `/` | Landing page (plain HTML, APK download button) |
-| `/app/` | Dashboard |
+| `/dashboard/` | Dashboard |
 
 Assembly happens automatically: `apps/dashboard/package.json` runs
 `scripts/assemble-site.mjs` as a `postbuild` hook after every `npm run build`,
-which moves the dashboard's exported home page to `/app` and puts the landing
-page at the root. This works regardless of the Vercel project's Root Directory
+which replaces the exported root page with the landing page; the dashboard
+itself lives at the ordinary /dashboard route. This works regardless of the Vercel project's Root Directory
 setting, because the hook fires wherever the build runs.
 
 The Android build (`npm run cap:sync`) deliberately bypasses the hook - the
