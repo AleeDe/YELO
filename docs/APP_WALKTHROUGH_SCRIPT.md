@@ -20,27 +20,43 @@ Total: **about 9.5 minutes** at a natural pace. Record with Zoom or Win+Alt+R.
 
 ---
 
-## 0. Introduction (~30 s)
+## 0. The problem (~45 s)
 
-**[Screen: the landing page /]**
+**[Screen: the landing page /, but do not scroll yet - or a plain title slide]**
 
-> Assalam-o-alaikum. This is YELO, our semester project for CS-551 Artificial
-> Intelligence at the University of Karachi, submitted to Sir Rana Zaeem Tariq.
-> I am Muhammad Ali, presenting on behalf of our group.
+> Assalam-o-alaikum. I am Muhammad Ali, presenting our group's semester
+> project for CS-551 Artificial Intelligence at the University of Karachi,
+> submitted to Sir Rana Zaeem Tariq.
 >
-> YELO is an AI-assisted littering detection platform. In this video I will
-> walk through the complete application from zero: the public site, the admin
-> panel, camera setup, and then a live demonstration of the AI detecting a
-> littering event as it happens.
+> Let me start with a problem every residential society in Karachi knows.
+> Somebody drops rubbish on the footpath and walks away. The guard did not see
+> it - guards cannot watch every corner. The CCTV recorded it, but nobody
+> reviews CCTV until somebody complains, and by then the person is long gone
+> and unidentifiable.
+>
+> The obvious fix - record everything, all the time - creates two new
+> problems. Storage for continuous video from every camera is expensive. And
+> residents do not want to live under full-time surveillance.
+>
+> So the real question is: can a camera decide, by itself, the exact moment
+> somebody drops litter - and save evidence of only that moment?
 
-## 1. Landing page (~30 s)
+## 1. Our solution (~40 s)
 
-**[Scroll the landing page slowly: metrics, pipeline, event rule]**
+**[Now scroll the landing page slowly: tagline, metrics, pipeline, event rule]**
 
-> This is our public page. It shows the trained model's real numbers: mean
-> average precision of 0.513, precision 0.713, and 75 millisecond inference on
-> CPU. Visitors can download the Android app from here, and this button opens
-> the dashboard, which is where I will go now.
+> That is YELO - our answer to that question. It watches restricted areas and
+> detects the act of littering itself: who was near, when the object was
+> dropped, with photo and video proof. Nothing is recorded continuously;
+> frames are analysed in memory and thrown away unless an event is confirmed.
+>
+> This public page shows the system honestly: our trained model's real
+> numbers - mean average precision 0.513, precision 0.713, 75 millisecond
+> inference on CPU - and the decision rule that makes it work.
+>
+> In this video I will build the whole thing up from zero: the admin panel,
+> camera setup, the AI pipeline, and then a live demonstration of the system
+> catching a littering event as it happens.
 
 **[Click Open Dashboard]**
 
@@ -197,25 +213,25 @@ is still running" and wait calmly. Do not restart.]**
 
 | # | Section | Time | Running |
 |---|---|---|---|
-| 0 | Introduction | 0:30 | 0:30 |
-| 1 | Landing page | 0:30 | 1:00 |
-| 2 | Sign-in and roles | 0:40 | 1:40 |
-| 3 | Dashboard overview | 0:35 | 2:15 |
-| 4 | Cameras and pairing | 1:20 | 3:35 |
-| 5 | Restricted zones | 0:50 | 4:25 |
-| 6 | The AI behind it | 1:30 | 5:55 |
-| 7 | Live demonstration | 1:40 | 7:35 |
-| 8 | Rest of the panel | 0:45 | 8:20 |
-| 9 | Conclusion | 0:40 | 9:00 |
+| 0 | The problem | 0:45 | 0:45 |
+| 1 | Our solution | 0:40 | 1:25 |
+| 2 | Sign-in and roles | 0:40 | 2:05 |
+| 3 | Dashboard overview | 0:35 | 2:40 |
+| 4 | Cameras and pairing | 1:20 | 4:00 |
+| 5 | Restricted zones | 0:50 | 4:50 |
+| 6 | The AI behind it | 1:30 | 6:20 |
+| 7 | Live demonstration | 1:40 | 8:00 |
+| 8 | Rest of the panel | 0:45 | 8:45 |
+| 9 | Conclusion | 0:40 | 9:25 |
 
-Nine minutes with a little slack - inside the 5-10 minute requirement. If you
+About nine and a half minutes - inside the 5-10 minute requirement. If you
 run long, compress section 8; never cut section 7.
 
 ## Required-points coverage
 
 | Required | Covered in |
 |---|---|
-| Problem statement | 0, 1 |
+| Problem statement | 0 |
 | Dataset | 6 (TACO mention) and 9 |
 | Model / algorithm | 6 |
 | Code overview | 6 (gateway walkthrough) |
