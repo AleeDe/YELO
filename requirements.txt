@@ -1,0 +1,43 @@
+# YELO - Python dependencies for the inference gateway
+#
+# Install with:
+#     pip install -r requirements.txt
+#
+# Note: torch is a large download (~2 GB). The first install takes several
+# minutes. A GPU is NOT required - the gateway runs on CPU by default.
+#
+# Versions below are the ones this project was developed and tested against
+# (Python 3.14.3, Windows 11). The lower bounds are the minimum we know works;
+# the upper bounds guard against breaking major releases.
+
+# --- Core detection and tracking -------------------------------------------
+
+# YOLO model loading, inference, and training. Pulls in torch/torchvision.
+ultralytics>=8.4,<9
+
+# Linear assignment solver. REQUIRED by ByteTrack - object tracking fails
+# without it, so it must be installed explicitly.
+lap>=0.5.12,<1
+
+# Headless OpenCV: image decoding and evidence-clip encoding. The "headless"
+# build is deliberate - the gateway is a server and needs no GUI windows.
+opencv-python-headless>=4.10,<5
+
+# --- Installed automatically with ultralytics -------------------------------
+# Listed explicitly so the exact tested versions are reproducible.
+
+torch>=2.5,<3
+torchvision>=0.20,<1
+numpy>=2.0,<3
+pillow>=11.0
+pyyaml>=6.0
+scipy>=1.14
+psutil>=6.0
+
+# --- Training only (Google Colab) -------------------------------------------
+# Not needed to RUN the project. Uncomment only to retrain the model.
+# See docs/COLAB_TRAINING_PLAN.md
+#
+# roboflow>=1.1          # downloads the TACO dataset
+# matplotlib>=3.9        # training curves (results.png)
+# pandas>=2.2            # results.csv handling

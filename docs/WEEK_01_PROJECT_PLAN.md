@@ -73,6 +73,12 @@ Next.js dashboard on Vercel and deploy the containerized Python/YOLO inference
 service on AWS EC2 behind HTTPS. AWS deployment is intentionally deferred until
 tracking, restricted-zone rules, and incident generation work locally.
 
+> **Week 4 update:** AWS deployment was evaluated and **not carried out**.
+> Free-tier instances have too little memory and CPU for this workload, and a
+> GPU instance is not free. The final system runs inference on a laptop and
+> exposes it over HTTPS through a reserved ngrok tunnel. See
+> `WEEK_03_BACKLOG.md` and `DEMO_RUNBOOK.md`.
+
 ## 5. User Roles
 
 ### Super Admin
@@ -216,12 +222,12 @@ Continuous raw video is not uploaded to Supabase.
 - [x] Define the incident lifecycle
 - [x] Draft the core data model
 - [x] Define the zero-cost deployment strategy
-- [ ] Inspect and document the existing repository
-- [ ] Create final database entity relationship diagram
-- [ ] Create dashboard wireframes
-- [ ] Create development environment files
-- [ ] Confirm the local machine can run YOLO inference
-- [ ] Prepare the Week 2 backlog
+- [x] Inspect and document the existing repository
+- [x] Create final database entity relationship diagram (see `DATABASE_DESIGN.md`)
+- [x] Create dashboard wireframes
+- [x] Create development environment files (`.env.example`)
+- [x] Confirm the local machine can run YOLO inference
+- [x] Prepare the Week 2 backlog
 
 ## 13. Week 1 Acceptance Criteria
 

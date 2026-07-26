@@ -1,6 +1,6 @@
 # YELO Demo Runbook
 
-How to run a live YELO demo (camera capture → local YOLO model → dashboard).
+How to run a live YELO demo (camera capture -> local YOLO model -> dashboard).
 
 The model runs on **this laptop**. A permanent ngrok tunnel exposes it over HTTPS
 so the web app and the Android (Capacitor) app can reach it from anywhere, and so
@@ -13,14 +13,22 @@ This URL is already baked into the app as the default processor URL.
 
 ---
 
-## Each demo — start these (leave all windows running)
+## Each demo - start these (leave all windows running)
 
 ### 1. Start the model gateway
 ```powershell
 cd D:\University\AI\Assignment\YELO\services\inference
 python server.py
 ```
-Wait for `YOLO model ready: yolo26m.pt`. It listens on `:8000`.
+Wait for `YOLO model ready: yolo_garbage.pt`. It listens on `:8000`.
+
+The model is selected in `services/inference/.env`:
+
+```ini
+YELO_MODEL_PATH=models/yolo_garbage.pt
+YELO_WASTE_CLASSES=trash
+YELO_MODEL_IMAGE_SIZE=480
+```
 
 ### 2. Start the permanent tunnel (new window)
 ```powershell
@@ -37,7 +45,7 @@ Go to the capture page -> **Start camera**. The **Processor** tile should
 show **Receiving** and "Frames sent" should count up.
 
 ## To stop
-`Ctrl+C` in each window. Restart anytime — the ngrok URL stays the same forever,
+`Ctrl+C` in each window. Restart anytime - the ngrok URL stays the same forever,
 so nothing needs to be re-pasted.
 
 ---
@@ -50,7 +58,7 @@ so nothing needs to be re-pasted.
 | ngrok not `online` | Restart step 2. If "authtoken" error: `ngrok config add-authtoken <token>` once. |
 | ngrok "agent too old" | `ngrok update` |
 | Gateway has no model | Confirm `python server.py` printed `YOLO model ready`. Check `ultralytics`, `opencv-python`, `torch` are installed. |
-| Check model health | `curl http://127.0.0.1:8000/health` — look for `"modelReady": true`. |
+| Check model health | `curl http://127.0.0.1:8000/health` - look for `"modelReady": true`. |
 
 ## One-time setup (already done, for reference)
 - `cloudflared` and `ngrok` installed and on PATH.
@@ -61,7 +69,7 @@ so nothing needs to be re-pasted.
 
 ## Notes
 - The gateway listens on `0.0.0.0:8000`; the tunnel forwards public HTTPS to it.
-- The app is served over HTTPS, so the processor URL must be HTTPS — the tunnel
+- The app is served over HTTPS, so the processor URL must be HTTPS - the tunnel
   provides that. A raw `http://<lan-ip>` would be blocked by mixed-content.
 - Windows Firewall only matters for direct LAN access; through the tunnel it is
   not required.

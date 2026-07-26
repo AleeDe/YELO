@@ -39,7 +39,8 @@ incident review, and realtime notification.
 3. Run **Automatic checks** in the **End-to-end camera test** panel.
 4. Verify body movement appears through WebRTC with no multi-second delay.
 5. Create or verify one restricted polygon over a clear ground area.
-6. Stand near the polygon with a visible bottle or cup.
+6. Stand near the polygon holding a visible piece of litter (bottle, wrapper,
+   can, or cup).
 7. Place the item inside the polygon and leave it stationary for the configured
    confirmation delay.
 8. Wait for the Capture timer to finish.
@@ -55,7 +56,7 @@ incident review, and realtime notification.
 - WebRTC state becomes connected on the same network.
 - YOLO gateway reports ready with a loaded model.
 - At least one active restricted zone exists.
-- A bottle or cup alone, without a nearby tracked person, does not start an
+- A waste object alone, without a nearby tracked person, does not start an
   event timer.
 - Moving waste restarts the stationary timer.
 - Confirmed waste creates exactly one incident per track during cooldown.
@@ -77,8 +78,13 @@ incident review, and realtime notification.
 
 ## Known MVP Limits
 
-- The public COCO model recognizes common objects such as bottles and cups but
-  is not a complete garbage model.
+- Field testing in Week 4 used the public COCO model (`yolo26m.pt`), which
+  recognizes common objects such as bottles and cups but is not a garbage
+  model. It was later replaced by our own `yolo_garbage.pt`, trained on TACO
+  (see `COLAB_TRAINING_PLAN.md`). Re-running this test with the custom model
+  detects a wider range of litter, including wrappers and cigarette ends.
+- The custom model has recall of 0.44, so small, occluded, or camouflaged
+  litter is still missed in individual frames.
 - Recorded-video ingestion is deferred; the working demo sources are mobile
   cameras and webcams.
 - Direct WebRTC can fail on restrictive NAT or firewall configurations without

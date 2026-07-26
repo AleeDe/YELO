@@ -54,11 +54,11 @@ Week 2 begins after the existing repository and local environment are verified.
 
 ## Verification
 
-- Test that Society A cannot access Society B
-- Test operator and admin permissions
-- Test unauthenticated access
-- Test invalid and revoked camera tokens
-- Add seed data for two societies and four cameras
+- [x] Test that Society A cannot access Society B
+- [x] Test operator and admin permissions
+- [x] Test unauthenticated access
+- [x] Test invalid and revoked camera tokens
+- [x] Add seed data for two societies and four cameras (`supabase/seed.sql`)
 
 ## Week 2 Completion Target
 

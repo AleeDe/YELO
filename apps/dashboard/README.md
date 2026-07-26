@@ -49,7 +49,7 @@ npx cap open android
 `cap:sync` creates a static Next.js export and copies it into the native
 project.
 
-## Interface Standard
+## Project Documentation
 
-Interaction and accessibility requirements are documented in
-[`../../docs/HCI_UI_STANDARD.md`](../../docs/HCI_UI_STANDARD.md).
+See the [project README](../../README.md) for the model, dataset, and setup
+instructions.

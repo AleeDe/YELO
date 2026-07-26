@@ -17,6 +17,15 @@ supabase/.temp/
 *.log
 __pycache__/
 *.py[cod]
-*.pt
 .DS_Store
 Thumbs.db
+
+# Generated submission package (rebuild with: python build_submission.py)
+submission/
+
+# Model weights (models/ directory).
+# Pretrained COCO checkpoints are ignored: they are large and Ultralytics
+# re-downloads them automatically on first use.
+*.pt
+# Our own trained model is a project deliverable and IS committed.
+!models/yolo_garbage.pt
