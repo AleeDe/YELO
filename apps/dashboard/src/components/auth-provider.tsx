@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { resolveUserAccess } from "@/lib/supabase/access";
+import { isPublicRoute } from "@/lib/public-routes";
 
 export type AppRole = "super_admin" | "society_admin" | "operator";
 
@@ -95,9 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured || loading) return;
-    const isPublicRoute =
-      pathname.startsWith("/auth") || pathname.startsWith("/capture");
-    if (!user && !isPublicRoute) {
+    if (!user && !isPublicRoute(pathname)) {
       router.replace(`/auth/sign-in?next=${encodeURIComponent(pathname)}`);
     }
   }, [loading, pathname, router, user]);

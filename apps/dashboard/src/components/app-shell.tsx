@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { isPublicRoute } from "@/lib/public-routes";
 import {
   AlertTriangle,
   BarChart3,
@@ -315,7 +316,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  if (pathname.startsWith("/auth") || pathname.startsWith("/capture") || pathname.startsWith("/legal")) {
+  if (isPublicRoute(pathname)) {
     return <>{children}</>;
   }
   if (auth.configured && (auth.loading || !auth.user)) {
