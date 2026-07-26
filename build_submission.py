@@ -127,7 +127,28 @@ def main():
         copy_file(os.path.join("docs", name),
                   os.path.join("05_Documentation", name))
 
-    print("\n6. Assets")
+    print("\n6. Videos")
+    videos = [
+        (r"C:\Users\muham\AppData\Local\CapCut\Videos\0726_compressed.mp4",
+         "APP_WALKTHROUGH_DEMO.mp4"),
+        (r"C:\Users\muham\Downloads"
+         r"\Beyond_the_Bounding_Box__Engineering_a_Temporal_Event_Detector.mp4",
+         "AI_GENERATED_OVERVIEW.mp4"),
+    ]
+    for src, dst_name in videos:
+        dst = os.path.join(PKG, "06_Videos", dst_name)
+        if os.path.exists(src):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+            print(f"  copied file: {dst_name}")
+        else:
+            print(f"  SKIP (missing): {src}")
+
+    print("\n7. Android app")
+    copy_file(os.path.join("artifacts", "YELO-v1.0.0.apk"),
+              os.path.join("07_Android_App", "YELO-v1.0.0.apk"))
+
+    print("\n8. Assets")
     copy_file(os.path.join("assets", "uok-logo.png"),
               os.path.join("01_Documents", "assets", "uok-logo.png"))
 
@@ -147,6 +168,12 @@ GROUP MEMBERS
 3. Abdur Rahman               B23110006005
 4. Arhum Farooq               B23110006017
 5. Sami Ullah                 B23110006146
+
+LIVE APPLICATION
+----------------
+https://yelo-murex.vercel.app/landing.html
+
+The dashboard is deployed on Vercel and can be explored in any browser.
 
 SOURCE CODE REPOSITORY
 ----------------------
@@ -194,6 +221,17 @@ WHAT IS IN THIS PACKAGE
     DATABASE_DESIGN.md          Database schema design
     DEMO_RUNBOOK.md             How to run a live demonstration
     WEEK_01..04                 Weekly planning and field-test records
+
+06_Videos/
+    APP_WALKTHROUGH_DEMO.mp4    Screen-recorded walkthrough of the full
+                                application (recorded by the team)
+    AI_GENERATED_OVERVIEW.mp4   AI-generated explainer video (declared in
+                                01_Documents/AI_USAGE_DECLARATION.md)
+
+07_Android_App/
+    YELO-v1.0.0.apk             Android app (installable APK). The same
+                                dashboard is also live in the browser at
+                                https://yelo-murex.vercel.app/landing.html
 
 
 DATASET

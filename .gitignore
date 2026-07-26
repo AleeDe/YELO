@@ -29,3 +29,6 @@ submission/
 *.pt
 # Our own trained model is a project deliverable and IS committed.
 !models/yolo_garbage.pt
+
+# Internal planning/scripts docs - not published to GitHub
+docs/
