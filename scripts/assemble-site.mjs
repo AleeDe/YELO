@@ -15,7 +15,9 @@
  * Run automatically by vercel.json after `next build`.
  */
 
-import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync, mkdirSync, copyFileSync, readdirSync, statSync, readFileSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,17 +44,46 @@ if (!existsSync(landingSrc)) {
 const dashboardRoot = join(outDir, "index.html");
 const appDir = join(outDir, "app");
 
-if (existsSync(dashboardRoot)) {
+if (!existsSync(dashboardRoot)) {
+  fail(`no ${dashboardRoot} found - did the Next.js export run?`);
+}
+
+// Guard against running twice over the same export: if out/index.html is
+// already the landing page (no Next.js bundle), copying it into /app would
+// overwrite the real dashboard page with the landing page.
+const rootHtml = readFileSync(dashboardRoot, "utf8");
+if (rootHtml.includes("/_next/")) {
   mkdirSync(appDir, { recursive: true });
   copyFileSync(dashboardRoot, join(appDir, "index.html"));
   console.log("assemble-site: dashboard home -> /app/index.html");
+} else if (existsSync(join(appDir, "index.html"))) {
+  console.log("assemble-site: /app already assembled, leaving it alone");
 } else {
-  console.warn("assemble-site: no out/index.html found; skipping /app move");
+  fail(
+    "out/index.html is not the dashboard export and /app/index.html is " +
+      "missing - run `npm run build` first",
+  );
 }
 
 // 2. Landing page becomes the new root.
+//
+//    It is written as plain HTML with no Next.js bundle. That matters: the
+//    dashboard's auth provider redirects any route outside /auth and /capture
+//    to the sign-in page, so if the landing page loaded the dashboard's
+//    JavaScript it would bounce visitors straight to login. Serving it as a
+//    standalone document keeps the router out of it entirely.
 copyFileSync(landingSrc, dashboardRoot);
-console.log("assemble-site: landing page -> /index.html");
+console.log("assemble-site: landing page -> /index.html (no Next.js bundle)");
+
+// Sanity check: the landing page must not pull in the dashboard runtime.
+const landingHtml = readFileSync(dashboardRoot, "utf8");
+if (landingHtml.includes("/_next/")) {
+  fail(
+    "landing page references /_next/ - the dashboard router would load and " +
+      "redirect visitors to the sign-in page",
+  );
+}
+console.log("assemble-site: verified landing page has no /_next/ references");
 
 // 3. Report what is being served, as a build-log sanity check.
 const entries = readdirSync(outDir)
