@@ -1,18 +1,23 @@
 /**
  * Assemble the deployed site after the Next.js static export.
  *
- * The dashboard exports to apps/dashboard/out/ with its own page at the root.
- * We want:
+ * Wanted layout:
  *
- *   /       the public landing page (docs/site/index.html)
+ *   /       the public landing page (landing/index.html, plain HTML)
  *   /app    the dashboard
  *
- * So this script moves the exported dashboard root page down into /app and
- * puts the landing page at the root. Every other exported route (cameras,
- * incidents, capture, and so on) stays where it is, because the dashboard
- * links to them by absolute path.
+ * The dashboard exports its own home page to out/index.html, so this script
+ * moves that page down to /app and puts the landing page at the root.
  *
- * Run automatically by vercel.json after `next build`.
+ * It runs as the package.json `postbuild` hook, which means it works no
+ * matter how Vercel is configured: whether the project's Root Directory is
+ * the repository root or apps/dashboard, `npm run build` always triggers it.
+ * Everything it needs lives inside apps/dashboard.
+ *
+ * Why the landing page must be plain HTML with no Next.js bundle: the
+ * dashboard's auth provider redirects any route outside the public list to
+ * sign-in. If the landing page loaded the dashboard's JavaScript, visitors
+ * would bounce straight to the login page.
  */
 
 import {
@@ -22,9 +27,9 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, "..");
-const outDir = join(repoRoot, "apps", "dashboard", "out");
-const landingSrc = join(repoRoot, "docs", "site", "index.html");
+const appRoot = join(here, "..");
+const outDir = join(appRoot, "out");
+const landingSrc = join(appRoot, "landing", "index.html");
 
 function fail(message) {
   console.error(`assemble-site: ${message}`);
@@ -32,15 +37,12 @@ function fail(message) {
 }
 
 if (!existsSync(outDir)) {
-  fail(`export directory not found: ${outDir}`);
+  fail(`export directory not found: ${outDir} - did next build run?`);
 }
 if (!existsSync(landingSrc)) {
   fail(`landing page not found: ${landingSrc}`);
 }
 
-// 1. Move the dashboard's exported root page to /app.
-//    With trailingSlash: true the export writes out/index.html for the
-//    dashboard home route.
 const dashboardRoot = join(outDir, "index.html");
 const appDir = join(outDir, "app");
 
@@ -48,9 +50,11 @@ if (!existsSync(dashboardRoot)) {
   fail(`no ${dashboardRoot} found - did the Next.js export run?`);
 }
 
-// Guard against running twice over the same export: if out/index.html is
-// already the landing page (no Next.js bundle), copying it into /app would
-// overwrite the real dashboard page with the landing page.
+// 1. Move the dashboard's exported root page to /app.
+//
+//    Guard against running twice over the same export: if out/index.html is
+//    already the landing page (no Next.js bundle), copying it into /app
+//    would overwrite the real dashboard page with the landing page.
 const rootHtml = readFileSync(dashboardRoot, "utf8");
 if (rootHtml.includes("/_next/")) {
   mkdirSync(appDir, { recursive: true });
@@ -66,12 +70,6 @@ if (rootHtml.includes("/_next/")) {
 }
 
 // 2. Landing page becomes the new root.
-//
-//    It is written as plain HTML with no Next.js bundle. That matters: the
-//    dashboard's auth provider redirects any route outside /auth and /capture
-//    to the sign-in page, so if the landing page loaded the dashboard's
-//    JavaScript it would bounce visitors straight to login. Serving it as a
-//    standalone document keeps the router out of it entirely.
 copyFileSync(landingSrc, dashboardRoot);
 console.log("assemble-site: landing page -> /index.html (no Next.js bundle)");
 
@@ -86,9 +84,6 @@ if (landingHtml.includes("/_next/")) {
 console.log("assemble-site: verified landing page has no /_next/ references");
 
 // 3. The reverse check: /app must be the dashboard, never the landing page.
-//    Getting this backwards would hand visitors a marketing page where the
-//    application should be, which is easy to miss because both routes still
-//    return 200.
 const appHtml = readFileSync(join(appDir, "index.html"), "utf8");
 if (!appHtml.includes("/_next/")) {
   fail("/app/index.html has no Next.js bundle - the dashboard is missing");

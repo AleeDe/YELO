@@ -5,12 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/assemble-site.mjs",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:field": "node scripts/field-smoke.mjs",
     "cap:add:android": "cap add android",
-    "cap:sync": "npm run build && cap sync"
+    "cap:sync": "next build && cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
