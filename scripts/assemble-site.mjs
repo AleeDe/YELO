@@ -85,7 +85,20 @@ if (landingHtml.includes("/_next/")) {
 }
 console.log("assemble-site: verified landing page has no /_next/ references");
 
-// 3. Report what is being served, as a build-log sanity check.
+// 3. The reverse check: /app must be the dashboard, never the landing page.
+//    Getting this backwards would hand visitors a marketing page where the
+//    application should be, which is easy to miss because both routes still
+//    return 200.
+const appHtml = readFileSync(join(appDir, "index.html"), "utf8");
+if (!appHtml.includes("/_next/")) {
+  fail("/app/index.html has no Next.js bundle - the dashboard is missing");
+}
+if (appHtml.includes("Download APK")) {
+  fail("/app/index.html looks like the landing page, not the dashboard");
+}
+console.log("assemble-site: verified /app serves the dashboard");
+
+// 4. Report what is being served, as a build-log sanity check.
 const entries = readdirSync(outDir)
   .filter((name) => statSync(join(outDir, name)).isDirectory())
   .sort();
